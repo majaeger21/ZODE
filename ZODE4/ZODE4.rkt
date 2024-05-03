@@ -91,11 +91,21 @@ Input: Sexp, Output: ExprC
        [else (error "ZODE: second # is not a vaild Real number")])]
     [else (error "ZODE: first # is not a vaild Real number")]))
 
-(define (lessEq [a : Real] [b : Real]) : Boolean
-  (<= a b))
+(define (lessEq [a : Any] [b : Any]) : Boolean
+  (cond
+    [(real? a)
+     (cond
+       [(real? b) (<= a b)]
+       [else (error "ZODE: second # is not a vaild Real number")])]
+    [else (error "ZODE: first # is not a vaild Real number")]))
 
-(define (equal? [a : Any] [b : Any]) : Boolean
-  (equal? a b))
+(define (equal [a : Any] [b : Any]) : Boolean
+  (cond
+    [(real? a)
+     (cond
+       [(real? b) (equal? a b)]
+       [else (error "ZODE: second # is not a vaild Real number")])]
+    [else (error "ZODE: first # is not a vaild Real number")]))
 
 
 #|
@@ -137,11 +147,22 @@ Input: ExprC Env, Output: Value
 (check-equal? (mult 1 -1) -1)
 (check-exn #rx"ZODE: first # is not a vaild Real number" (lambda () (mult 'a 'b)))
 
-(check-equal? (div 4 5) 4/5)
-(check-equal? (div 0 1) 0)
-(check-equal? (div 1 -1) -1)
-(check-exn #rx"ZODE: second # is 0" (lambda () (div 8 0)))
-(check-exn #rx"ZODE: first # is not a vaild Real number" (lambda () (div 'a 'b)))
+;(check-equal? (div 4 5) 4/5)
+;(check-equal? (div 0 1) 0)
+;(check-equal? (div 1 -1) -1)
+;(check-exn #rx"ZODE: second # is 0" (lambda () (div 8 0)))
+;(check-exn #rx"ZODE: first # is not a vaild Real number" (lambda () (div 'a 'b)))
+
+(check-equal? (lessEq 4 5) #t)
+(check-equal? (lessEq 0 1) #t)
+(check-equal? (lessEq 1 -1) #f)
+(check-exn #rx"ZODE: first # is not a vaild Real number" (lambda () (lessEq 'a 'b)))
+
+(check-equal? (equal 4 5) #f)
+(check-equal? (equal 0 1) #f)
+(check-equal? (equal -1 -1) #t)
+(check-exn #rx"ZODE: first # is not a vaild Real number" (lambda () (equal 'a 'b)))
+
 
 
 
