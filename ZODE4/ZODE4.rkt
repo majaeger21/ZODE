@@ -56,17 +56,40 @@ Input: Sexp, Output: ExprC
     [other (error 'parse-clauses "ZODE: expected valid expression, got: ~e" other)]))
 
 #|Top-level Env|#
-(define (add [a : Real] [b : Real]) : Real
-  (+ a b))
+(define (add [a : Any] [b : Any]) : Real
+  (cond
+    [(real? a)
+     (cond
+       [(real? b) (+ a b)]
+       [else (error "ZODE: second # is not a vaild Real number")])]
+    [else (error "ZODE: first # is not a vaild Real number")]))
 
-(define (sub [a : Real] [b : Real]) : Real
-  (- a b))
+(define (sub [a : Any] [b : Any]) : Real
+  (cond
+    [(real? a)
+     (cond
+       [(real? b) (- a b)]
+       [else (error "ZODE: second # is not a vaild Real number")])]
+    [else (error "ZODE: first # is not a vaild Real number")]))
 
-(define (mult [a : Real] [b : Real]) : Real
-  (* a b))
+(define (mult [a : Any] [b : Any]) : Real
+  (cond
+    [(real? a)
+     (cond
+       [(real? b) (* a b)]
+       [else (error "ZODE: second # is not a vaild Real number")])]
+    [else (error "ZODE: first # is not a vaild Real number")]))
 
-(define (div [a : Real] [b : Real]) : Real
-  (/ a b))
+(define (div [a : Any] [b : Any]) : Real
+  (cond
+    [(real? a)
+     (cond
+       [(real? b)
+        (cond
+          [(equal? 0 b) (error "ZODE: second # is 0")]
+          [else (/ a b)])]
+       [else (error "ZODE: second # is not a vaild Real number")])]
+    [else (error "ZODE: first # is not a vaild Real number")]))
 
 (define (lessEq [a : Real] [b : Real]) : Boolean
   (<= a b))
@@ -97,5 +120,30 @@ Input: ExprC Env, Output: Value
                                                                          (list (IdC 'x)
                                                                                (NumC 1))))
                                                   (list (NumC 12))))
+;;Top-level Env
+(check-equal? (add 4 5) 9)
+(check-equal? (add 0 1) 1)
+(check-equal? (add 1 -1) 0)
+(check-equal? (add 1 -1) 0)
+(check-exn #rx"ZODE: second # is not a vaild Real number" (lambda () (add 4 'b)))
+
+(check-equal? (sub 4 5) -1)
+(check-equal? (sub 0 1) -1)
+(check-equal? (sub 1 -1) 2)
+(check-exn #rx"ZODE: first # is not a vaild Real number" (lambda () (sub 'a 4)))
+
+(check-equal? (mult 4 5) 20)
+(check-equal? (mult 0 1) 0)
+(check-equal? (mult 1 -1) -1)
+(check-exn #rx"ZODE: first # is not a vaild Real number" (lambda () (mult 'a 'b)))
+
+(check-equal? (div 4 5) 4/5)
+(check-equal? (div 0 1) 0)
+(check-equal? (div 1 -1) -1)
+(check-exn #rx"ZODE: second # is 0" (lambda () (div 8 0)))
+(check-exn #rx"ZODE: first # is not a vaild Real number" (lambda () (div 'a 'b)))
+
+
+
 
 
