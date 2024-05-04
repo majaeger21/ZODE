@@ -29,7 +29,6 @@ Input: Sexp, Output: ExprC
 (define (parse [exp : Sexp]) : ExprC
   (match exp
     [(? real? n) (NumC n)]
-    
     [(? string? s) (StrC s)]
     [(list 'if ': cond ': then ': else) (IfC (parse cond) (parse then) (parse else))]
     [(list 'locals ': cls ... ': exp) (let ([clauses (parse-clauses (cast cls (Listof Sexp)))])(AppC (LambC (first clauses) (parse exp)) (second clauses)))]
@@ -55,58 +54,63 @@ Input: Sexp, Output: ExprC
     [(list (? is-valid-identifier? id) '= exp ': cls ...) (let ([res (parse-clauses cls)]) (list (cons id (first res)) (cons (parse exp) (second res))))]
     [other (error 'parse-clauses "ZODE: expected valid expression, got: ~e" other)]))
 
-#|Top-level Env|#
-(define (add [a : Any] [b : Any]) : Real
-  (cond
-    [(real? a)
-     (cond
-       [(real? b) (+ a b)]
-       [else (error "ZODE: second # is not a vaild Real number")])]
-    [else (error "ZODE: first # is not a vaild Real number")]))
+#|Values|#
+(define-type Value (U BoolV NumV SymV PrimV CloV))
+(struct NumV ([n : Real]) #:transparent)
+(struct SymV ([s : Symbol]) #:transparent)
+(struct BoolV ([b : Boolean]) #:transparent)
+(struct PrimV ([p : Symbol]) #:transparent)
+(struct CloV ([args : (Listof Symbol)] [body : ExprC] [env : Environment]) #:transparent)
 
-(define (sub [a : Any] [b : Any]) : Real
-  (cond
-    [(real? a)
-     (cond
-       [(real? b) (- a b)]
-       [else (error "ZODE: second # is not a vaild Real number")])]
-    [else (error "ZODE: first # is not a vaild Real number")]))
+(struct Binding ([name : Symbol] [val : Value]))
+(define-type Environment (Listof Binding))
 
-(define (mult [a : Any] [b : Any]) : Real
+#|Top-level Env Functions|#
+(define (apply-func [op : Symbol] [args : (Listof Value)]) : Value
   (cond
-    [(real? a)
-     (cond
-       [(real? b) (* a b)]
-       [else (error "ZODE: second # is not a vaild Real number")])]
-    [else (error "ZODE: first # is not a vaild Real number")]))
+    [(equal? op '+) (apply-op '+ args)]
+    [(equal? op '-) (apply-op '- args)]
+    [(equal? op '*) (apply-op '* args)]
+    [(equal? op '/) (apply-op '/ args)]
+    [(equal? op '<=) (apply-op '<= args)]
+    [(equal? op 'equal?) (apply-op 'equal? args)]
+    [else (error 'user-error "Unknown primitive operator")]))
 
-(define (div [a : Any] [b : Any]) : Real
+(define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
+  (match args
+    [(list (NumV a) (NumV b))
+     (cond
+       [(eq? op '+) (NumV (+ a b))]
+       [(eq? op '-) (NumV (- a b))]
+       [(eq? op '*) (NumV (* a b))]
+       [(eq? op '/) (if (not (zero? b))
+                       (NumV (/ a b))
+                       (error 'user-error "Division by zero"))]
+       [(eq? op '<=) (BoolV (<= a b))]
+       [(eq? op 'equal?) (apply-equal-op args)]
+       [else (error 'user-error "Unknown operator")])]
+    [else (error 'user-error "Invalid arguments for operation")]))
+
+(define (apply-equal-op args)
+  (match args
+    [(list a b) (BoolV (and (not (or (PrimV? a) (CloV? a)))
+                            (not (or (PrimV? b) (CloV? b)))
+                            (equal-no-errors a b)))]
+    [else (error 'user-error "Invalid arguments for equality comparison operation")]))
+
+(define (equal-no-errors [a : Any] [b : Any]) : Boolean
   (cond
-    [(real? a)
-     (cond
-       [(real? b)
-        (cond
-          [(equal? 0 b) (error "ZODE: second # is 0")]
-          [else (/ a b)])]
-       [else (error "ZODE: second # is not a vaild Real number")])]
-    [else (error "ZODE: first # is not a vaild Real number")]))
+    [(real? a) (cond [(real? b) (equal? a b)]
+                     [else #f])]
+    [else #f]))
 
-(define (lessEq [a : Any] [b : Any]) : Boolean
-  (cond
-    [(real? a)
-     (cond
-       [(real? b) (<= a b)]
-       [else (error "ZODE: second # is not a vaild Real number")])]
-    [else (error "ZODE: first # is not a vaild Real number")]))
+(define (user-error [v : Value]) : Nothing
+  (error 'user-error (~v v)))  ; TODO: change this to serialize v
 
-(define (equal [a : Any] [b : Any]) : Boolean
-  (cond
-    [(real? a)
-     (cond
-       [(real? b) (equal? a b)]
-       [else (error "ZODE: second # is not a vaild Real number")])]
-    [else (error "ZODE: first # is not a vaild Real number")]))
-
+#|
+Serialize
+Input: ZODE4 Value, Output: String
+|#
 
 #|
 Interpreter
@@ -120,6 +124,7 @@ Input: ExprC Env, Output: Value
 (check-equal? (parse 'g) (IdC 'g))
 (check-equal? (parse 'x) (IdC 'x))
 (check-equal? (parse "hello") (StrC "hello"))
+(check-equal? (parse '{if : 3 : 4 : 5}) (IfC (NumC 3) (NumC 4) (NumC 5)))
 (check-equal? (parse-clauses '{x = 12}) (list (list 'x) (list (NumC 12))))
 (check-equal? (parse-clauses '{x = 12 : y = 3}) (list (list 'x 'y) (list (NumC 12) (NumC 3))))
 (check-equal? (parse '{locals : x = 12 : {+ x 1}}) (AppC (LambC (list 'x) (AppC (IdC '+)
@@ -130,41 +135,14 @@ Input: ExprC Env, Output: Value
                                                                          (list (IdC 'x)
                                                                                (NumC 1))))
                                                   (list (NumC 12))))
-;;Top-level Env
-(check-equal? (add 4 5) 9)
-(check-equal? (add 0 1) 1)
-(check-equal? (add 1 -1) 0)
-(check-equal? (add 1 -1) 0)
-(check-exn #rx"ZODE: second # is not a vaild Real number" (lambda () (add 4 'b)))
 
-(check-equal? (sub 4 5) -1)
-(check-equal? (sub 0 1) -1)
-(check-equal? (sub 1 -1) 2)
-(check-exn #rx"ZODE: first # is not a vaild Real number" (lambda () (sub 'a 4)))
+(check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{if : 3 : 4 : 'locals})))
+(check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{{lamb : x locals : {+ x 1}} 12})))
+(check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse '{})))
+(check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse-clauses '{})))
 
-(check-equal? (mult 4 5) 20)
-(check-equal? (mult 0 1) 0)
-(check-equal? (mult 1 -1) -1)
-(check-exn #rx"ZODE: first # is not a vaild Real number" (lambda () (mult 'a 'b)))
-
-;(check-equal? (div 4 5) 4/5)
-;(check-equal? (div 0 1) 0)
-;(check-equal? (div 1 -1) -1)
-;(check-exn #rx"ZODE: second # is 0" (lambda () (div 8 0)))
-;(check-exn #rx"ZODE: first # is not a vaild Real number" (lambda () (div 'a 'b)))
-
-(check-equal? (lessEq 4 5) #t)
-(check-equal? (lessEq 0 1) #t)
-(check-equal? (lessEq 1 -1) #f)
-(check-exn #rx"ZODE: first # is not a vaild Real number" (lambda () (lessEq 'a 'b)))
-
-(check-equal? (equal 4 5) #f)
-(check-equal? (equal 0 1) #f)
-(check-equal? (equal -1 -1) #t)
-(check-exn #rx"ZODE: first # is not a vaild Real number" (lambda () (equal 'a 'b)))
-
-
-
-
-
-
+;;Top-level Env Functions
+(check-equal? (apply-func '+ (list (NumV 5) (NumV 3))) (NumV 8))
+(check-equal? (apply-func '- (list (NumV 10) (NumV 4))) (NumV 6))
+(check-equal? (apply-func '* (list (NumV 7) (NumV 2))) (NumV 14))
+(check-equal? (apply-func '/ (list (NumV 12) (NumV 4))) (NumV 3))
