@@ -117,6 +117,85 @@ Interpreter
 Input: ExprC Env, Output: Value
 |#
 
+;getFunDef
+;;gets a function defintion by its ID defined by AppC
+(define (getFunDef [f : Symbol] [defs : (Listof FundefC)]) : FundefC
+  (cond
+    [(empty? defs) (error 'getFunDef "ZODE: Function Application Error: Function ~e does not exist" f)]
+    [(equal? (FundefC-name (first defs)) f) (first defs)]
+    [else (getFunDef f (rest defs))]))
+
+
+
+;list-sub
+;;substitutes all expressions in a list of expressions
+(define (list-sub [exps : (Listof ExprC)] [new : ExprC] [old : Symbol]) : (Listof ExprC)
+  (cond
+    [(empty? exps) '()]
+    [else (cons (subst new old (first exps)) (list-sub (rest exps) new old))]))
+
+;subst
+;; substitutes all occurences of a given id with the corresponding symbol with the given expression
+(define (subst [new : ExprC] [old : Symbol] [exp : ExprC]) : ExprC
+  (match exp
+    [(NumC n) exp]
+    [(IdC s) (cond
+               [(symbol=? s old) new]
+               [else exp])]
+    [(BinOpC s l r) (BinOpC s (subst new old l) (subst new old r))]
+    [(AppC n args) (AppC n (list-sub args new old))]
+    [(IfLeqZeroC i t e) (IfLeqZeroC (subst new old i) (subst new old t) (subst new old e))]))
+
+
+
+
+;subst-all
+;;substitues for all arguments
+(define (subst-all [exp : ExprC] [args : (Listof ExprC)] [params : (Listof Symbol)] [funs : (Listof FundefC)]) : ExprC
+  (cond
+    [(empty? args) exp]
+    [else (subst-all (subst (NumC (interp (first args) funs)) (first params) exp) (rest args) (rest params) funs)]))
+
+
+
+
+
+;interp
+;;accepts an ExprC and a list of function definitions and returns a Real number (the value)
+(define (interp [exp : ExprC] [funs : (Listof FundefC) [env : Environment]]) : Real
+  (match exp
+    [(NumC n) n]
+    [(BinOpC s l r) (match s
+                      ['+ (+ (interp l funs env) (interp r funs env))]
+                      ['* (* (interp l funs env) (interp r funs env))]
+                      ['- (- (interp l funs env) (interp r funs env))]
+                      ['/ (let ([il (interp l funs env)] [ir (interp r funs env)])
+                            (cond
+                              [(equal? ir 0) (error 'interp "ZODE: Divide By Zero Error")]
+                              [else (/ (interp l funs env) (interp r funs env))]))])]
+    [(IfLeqZeroC c i e) (cond
+                          [(<= (interp c funs env) 0) (interp i funs env)]
+                          [else (interp e funs env)])]
+    [(AppC s args) (let ([fd (getFunDef s funs env)])
+                     (cond
+                       [(= (length args) (length (FundefC-args fd))) (interp (subst-all
+                              (FundefC-body fd) args (FundefC-args fd) funs) funs env)]
+                       [else (error 'interp "ZODE: Number of Argument Mismatch, expected
+                               ~e, got ~e" (length (FundefC-args fd)) (length args))]))]
+    ))
+
+
+
+;interp-fns
+;;accepts a list of functions and interprets the function called main
+(define (interp-fns [funs : (Listof FundefC)]) : Real
+  (interp (FundefC-body (getFunDef 'main funs)) funs))
+
+;Top Interp
+;accepts and S expression, parses, interprets, and returns a value
+(define (top-interp [fun-sexp : Sexp]) : Real
+  (interp-fns (parse-prog fun-sexp)))
+
 
 #|TEST CASES|#
 ;;Parse
