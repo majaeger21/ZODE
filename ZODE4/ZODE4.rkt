@@ -55,14 +55,14 @@ Input: Sexp, Output: ExprC
     [other (error 'parse-clauses "ZODE: expected valid expression, got: ~e" other)]))
 
 #|Values|#
-(define-type Value (U BoolV NumV SymV PrimV CloV))
+(define-type Value (U BoolV NumV StrV PrimV CloV))
 (struct NumV ([n : Real]) #:transparent)
-(struct SymV ([s : Symbol]) #:transparent)
+(struct StrV ([s : Symbol]) #:transparent)
 (struct BoolV ([b : Boolean]) #:transparent)
 (struct PrimV ([p : Symbol]) #:transparent)
 (struct CloV ([args : (Listof Symbol)] [body : ExprC] [env : Environment]) #:transparent)
 
-(struct Binding ([name : Symbol] [val : Value]))
+(struct Binding ([name : Symbol] [val : Value]) #:transparent)
 (define-type Environment (Listof Binding))
 
 #|Top-level Env Functions|#
@@ -73,30 +73,29 @@ Input: Sexp, Output: ExprC
     [(equal? op '*) (apply-op '* args)]
     [(equal? op '/) (apply-op '/ args)]
     [(equal? op '<=) (apply-op '<= args)]
-    [(equal? op 'equal?) (apply-op 'equal? args)]
-    [else (error 'user-error "Unknown primitive operator")]))
+    [(equal? op 'equals?) (apply-equal-op args)]
+    [else (error "ZODE: Unknown operator, got: ~e" op)]))
 
 (define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
   (match args
     [(list (NumV a) (NumV b))
      (cond
-       [(eq? op '+) (NumV (+ a b))]
-       [(eq? op '-) (NumV (- a b))]
-       [(eq? op '*) (NumV (* a b))]
-       [(eq? op '/) (if (not (zero? b))
+       [(equal? op '+) (NumV (+ a b))]
+       [(equal? op '-) (NumV (- a b))]
+       [(equal? op '*) (NumV (* a b))]
+       [(equal? op '/) (if (not (zero? b))
                        (NumV (/ a b))
-                       (error 'user-error "Division by zero"))]
-       [(eq? op '<=) (BoolV (<= a b))]
-       [(eq? op 'equal?) (apply-equal-op args)]
-       [else (error 'user-error "Unknown operator")])]
-    [else (error 'user-error "Invalid arguments for operation")]))
+                       (error "ZODE: Division by zero"))]
+       [(equal? op '<=) (BoolV (<= a b))]
+       [else (error "ZODE: Unknown operator, got: ~e" op)])]
+    [else (error "ZODE: Invalid arguments for operation")]))
 
-(define (apply-equal-op args)
+(define (apply-equal-op [args : (Listof Value)]) : Value
   (match args
     [(list a b) (BoolV (and (not (or (PrimV? a) (CloV? a)))
                             (not (or (PrimV? b) (CloV? b)))
                             (equal-no-errors a b)))]
-    [else (error 'user-error "Invalid arguments for equality comparison operation")]))
+    [else (error "ZODE: Invalid arguments for equality comparison operation")]))
 
 (define (equal-no-errors [a : Any] [b : Any]) : Boolean
   (cond
@@ -225,3 +224,12 @@ Input: ExprC Env, Output: Value
 (check-equal? (apply-func '- (list (NumV 10) (NumV 4))) (NumV 6))
 (check-equal? (apply-func '* (list (NumV 7) (NumV 2))) (NumV 14))
 (check-equal? (apply-func '/ (list (NumV 12) (NumV 4))) (NumV 3))
+(check-exn #rx"ZODE: Division by zero" (lambda () (apply-func '/ (list (NumV 3) (NumV 0)))))
+(check-equal? (apply-func '<= (list (NumV 12) (NumV 4))) (BoolV #f))
+(check-equal? (apply-func '<= (list (NumV 4) (NumV 4))) (BoolV #t))
+(check-equal? (apply-func '<= (list (NumV 3) (NumV 4))) (BoolV #t))
+(check-exn #rx"ZODE: Unknown operator, got: " (lambda () (apply-func 'j (list (NumV 3) (NumV 0)))))
+(check-exn #rx"ZODE: Unknown operator, got: " (lambda () (apply-op 'j (list (NumV 3) (NumV 0)))))
+(check-exn #rx"ZODE: Invalid arguments for operation" (lambda () (apply-op 'j (list (BoolV #t) (NumV 0)))))
+(check-equal? (apply-func 'equals? (list (NumV 5) (NumV 6))) (BoolV #f))
+
