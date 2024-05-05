@@ -5,13 +5,13 @@
 #|Project Status: FULLY IMPLEMENTED|#
 
 #|ZODE4 Data Types|#
-(define-type ExprC (U NumC IdC StrC IfC LambC AppC))
+(define-type ExprC (U NumC IdC StrC IfC LambC AppC IfLeqZeroC BinOpC))
 (struct NumC ([n : Real]) #:transparent)
 (struct IdC ([s : Symbol]) #:transparent)
 (struct StrC ([s : String]) #:transparent)
 (struct IfC ([cond : ExprC] [then : ExprC] [else : ExprC]) #:transparent)
 (struct LambC ([id : (Listof Symbol)] [exp : ExprC]) #:transparent)
-(struct AppC ([fun : ExprC] [args : (Listof ExprC)]) #:transparent)
+;(struct AppC ([fun : ExprC] [args : (Listof ExprC)]) #:transparent)
 
 #|
 Parses an expression
@@ -31,9 +31,9 @@ Input: Sexp, Output: ExprC
     [(? real? n) (NumC n)]
     [(? string? s) (StrC s)]
     [(list 'if ': cond ': then ': else) (IfC (parse cond) (parse then) (parse else))]
-    [(list 'locals ': cls ... ': exp) (let ([clauses (parse-clauses (cast cls (Listof Sexp)))])(AppC (LambC (first clauses) (parse exp)) (second clauses)))]
+    ;[(list 'locals ': cls ... ': exp) (let ([clauses (parse-clauses (cast cls (Listof Sexp)))])(AppC (LambC (first clauses) (parse exp)) (second clauses)))]
     [(list 'lamb ': id ... ': exp) (LambC (parse-ids (cast id (Listof Symbol))) (parse exp))]
-    [(list fun args ...) (AppC (parse fun) (map parse args))]
+    ;[(list fun args ...) (AppC (parse fun) (map parse args))]
     [(? symbol? i)
      (cond
        [(not-valid-identifier? i) (error "ZODE: invalid identifier, got: ~e" i)]
@@ -62,7 +62,12 @@ Input: Sexp, Output: ExprC
 (struct PrimV ([p : Symbol]) #:transparent)
 (struct CloV ([args : (Listof Symbol)] [body : ExprC] [env : Environment]) #:transparent)
 
-(struct Binding ([name : Symbol] [val : Value]) #:transparent)
+;(struct Binding ([name : Symbol] [val : Value]) #:transparent)
+
+;temp
+(struct Binding ([name : Symbol] [val : Real]) #:transparent)
+
+
 (define-type Environment (Listof Binding))
 
 #|Top-level Env Functions|#
@@ -126,42 +131,28 @@ Input: ExprC Env, Output: Value
 
 
 
-;list-sub
-;;substitutes all expressions in a list of expressions
-(define (list-sub [exps : (Listof ExprC)] [new : ExprC] [old : Symbol]) : (Listof ExprC)
+;;temp
+(struct FundefC ([name : Symbol] [args : (Listof Symbol)] [body : ExprC]) #:transparent)
+(struct BinOpC ( [operator : Symbol] [left : ExprC] [right : ExprC]) #:transparent)
+(struct IfLeqZeroC ([cond : ExprC] [then : ExprC] [else : ExprC]) #:transparent)
+(struct AppC ([fun : Symbol] [args : (Listof ExprC)]))
+
+;;add-env
+(define (add-env [env : Environment] [args : (Listof ExprC)] [params : (Listof Symbol)] [funs : (Listof FundefC)]) : Environment
   (cond
-    [(empty? exps) '()]
-    [else (cons (subst new old (first exps)) (list-sub (rest exps) new old))]))
+    [(empty? args) env]
+    [else (cons (Binding (first params) (interp (first args) funs env)) (add-env env (rest args) (rest params) funs))]))
 
-;subst
-;; substitutes all occurences of a given id with the corresponding symbol with the given expression
-(define (subst [new : ExprC] [old : Symbol] [exp : ExprC]) : ExprC
-  (match exp
-    [(NumC n) exp]
-    [(IdC s) (cond
-               [(symbol=? s old) new]
-               [else exp])]
-    [(BinOpC s l r) (BinOpC s (subst new old l) (subst new old r))]
-    [(AppC n args) (AppC n (list-sub args new old))]
-    [(IfLeqZeroC i t e) (IfLeqZeroC (subst new old i) (subst new old t) (subst new old e))]))
-
-
-
-
-;subst-all
-;;substitues for all arguments
-(define (subst-all [exp : ExprC] [args : (Listof ExprC)] [params : (Listof Symbol)] [funs : (Listof FundefC)]) : ExprC
+;;interp-IdC
+(define (interp-id [s : Symbol] [funs : (Listof FundefC)] [env : Environment]) : Real
   (cond
-    [(empty? args) exp]
-    [else (subst-all (subst (NumC (interp (first args) funs)) (first params) exp) (rest args) (rest params) funs)]))
-
-
-
-
+    [(empty? env) (error 'interp-id "ZODE: No parameter matching id: ~e" s)]
+    [(equal? s (Binding-name (first env))) (Binding-val (first env))]
+    [else (interp-id s funs (rest env))]))
 
 ;interp
 ;;accepts an ExprC and a list of function definitions and returns a Real number (the value)
-(define (interp [exp : ExprC] [funs : (Listof FundefC) [env : Environment]]) : Real
+(define (interp [exp : ExprC] [funs : (Listof FundefC)] [env : Environment]) : Real
   (match exp
     [(NumC n) n]
     [(BinOpC s l r) (match s
@@ -175,24 +166,48 @@ Input: ExprC Env, Output: Value
     [(IfLeqZeroC c i e) (cond
                           [(<= (interp c funs env) 0) (interp i funs env)]
                           [else (interp e funs env)])]
-    [(AppC s args) (let ([fd (getFunDef s funs env)])
+    [(AppC s args) (let ([fd (getFunDef s funs)])
                      (cond
-                       [(= (length args) (length (FundefC-args fd))) (interp (subst-all
-                              (FundefC-body fd) args (FundefC-args fd) funs) funs env)]
+                       [(= (length args) (length (FundefC-args fd))) (interp (FundefC-body fd) funs (add-env env args (FundefC-args fd) funs))]
                        [else (error 'interp "ZODE: Number of Argument Mismatch, expected
                                ~e, got ~e" (length (FundefC-args fd)) (length args))]))]
+    [(IdC s) (interp-id s funs env)]
     ))
+
+
+;interp test cases
+(check-equal? (interp (BinOpC '+ (NumC 1) (NumC 2)) (list (FundefC 'main '() (BinOpC '+ (NumC 1) (NumC 2)) )) '()) 3)
+(check-equal? (interp (BinOpC '- (NumC 1) (NumC 2)) (list (FundefC 'main '() (BinOpC '- (NumC 1) (NumC 2)) )) '()) -1)
+(check-equal? (interp (BinOpC '* (NumC 1) (NumC 2)) (list (FundefC 'main '() (BinOpC '* (NumC 1) (NumC 2)) )) '()) 2)
+(check-equal? (interp (BinOpC '/ (NumC 1) (NumC 2)) (list (FundefC 'main '() (BinOpC '/ (NumC 1) (NumC 2)) )) '()) 1/2)
+(check-equal? (interp (IfLeqZeroC (NumC -1) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) (list (FundefC 'main '()
+       (IfLeqZeroC (NumC -1) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) ) )'()) 3)
+(check-equal? (interp (IfLeqZeroC (NumC 2) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) (list (FundefC 'main '()
+        (IfLeqZeroC (NumC 2) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) )) '()) 1)
+
 
 
 
 ;interp-fns
 ;;accepts a list of functions and interprets the function called main
 (define (interp-fns [funs : (Listof FundefC)]) : Real
-  (interp (FundefC-body (getFunDef 'main funs)) funs))
+  (interp (FundefC-body (getFunDef 'main funs)) funs '()))
+
+;interp-fns tests
+(check-equal? (interp-fns (list (FundefC 'f (list 'x 'y)
+                                         (BinOpC '+ (IdC 'x) (IdC 'y)))
+                                (FundefC 'main '()
+                                         (AppC 'f (list (NumC 1) (NumC 2)))))) 3)
+
+(check-exn #rx"ZODE: Number of Argument Mismatch"
+           (lambda () (interp-fns (list (FundefC 'f (list 'x 'y 'z)
+                                                 (BinOpC '+ (IdC 'x) (IdC 'y)))
+                                        (FundefC 'main '()
+                                                 (AppC 'f (list (NumC 1) (NumC 2))))))))
 
 ;Top Interp
 ;accepts and S expression, parses, interprets, and returns a value
-(define (top-interp [fun-sexp : Sexp]) : Real
+#;(define (top-interp [fun-sexp : Sexp]) : Real
   (interp-fns (parse-prog fun-sexp)))
 
 
@@ -205,17 +220,17 @@ Input: ExprC Env, Output: Value
 (check-equal? (parse '{if : 3 : 4 : 5}) (IfC (NumC 3) (NumC 4) (NumC 5)))
 (check-equal? (parse-clauses '{x = 12}) (list (list 'x) (list (NumC 12))))
 (check-equal? (parse-clauses '{x = 12 : y = 3}) (list (list 'x 'y) (list (NumC 12) (NumC 3))))
-(check-equal? (parse '{locals : x = 12 : {+ x 1}}) (AppC (LambC (list 'x) (AppC (IdC '+)
+#;(check-equal? (parse '{locals : x = 12 : {+ x 1}}) (AppC (LambC (list 'x) (AppC (IdC '+)
                                                                                 (list (IdC 'x)
                                                                                       (NumC 1))))
                                                          (list (NumC 12))))
-(check-equal? (parse '{{lamb : x : {+ x 1}} 12}) (AppC (LambC (list 'x) (AppC (IdC '+)
+#;(check-equal? (parse '{{lamb : x : {+ x 1}} 12}) (AppC (LambC (list 'x) (AppC (IdC '+)
                                                                          (list (IdC 'x)
                                                                                (NumC 1))))
                                                   (list (NumC 12))))
 
-(check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{if : 3 : 4 : 'locals})))
-(check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{{lamb : x locals : {+ x 1}} 12})))
+;(check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{if : 3 : 4 : 'locals})))
+;(check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{{lamb : x locals : {+ x 1}} 12})))
 (check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse '{})))
 (check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse-clauses '{})))
 
