@@ -133,7 +133,7 @@ Input: ExprC Env, Output: Value
                  (Binding '* (PrimV '*))
                  (Binding '/ (PrimV '/))
                  (Binding '<= (PrimV '<=))
-                 (Binding 'equal? (PrimV 'equal?))))
+                 (Binding 'equals? (PrimV 'equals?))))
 
 
 ;;add-env
@@ -192,7 +192,7 @@ Input: ExprC Env, Output: Value
 (check-equal? (interp (AppC (IdC '-) (list (NumC 1) (NumC 2))) top-env) (NumV -1))
 (check-equal? (interp (AppC (IdC '*) (list (NumC 1) (NumC 2))) top-env) (NumV 2))
 (check-equal? (interp (AppC (IdC '/) (list (NumC 1) (NumC 2))) top-env) (NumV 1/2))
-(check-equal? (interp (AppC (IdC 'equal?) (list (NumC 3) (AppC (IdC '+) (list (NumC 1) (NumC 2))))) top-env) (BoolV #t))
+(check-equal? (interp (AppC (IdC 'equals?) (list (NumC 3) (AppC (IdC '+) (list (NumC 1) (NumC 2))))) top-env) (BoolV #t))
 (check-equal? (interp (IfLeqZeroC (NumC 2) (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 1))
 
 
@@ -237,16 +237,3 @@ Input: ExprC Env, Output: Value
 (check-exn #rx"ZODE: Unknown operator, got: " (lambda () (apply-op 'j (list (NumV 3) (NumV 0)))))
 (check-exn #rx"ZODE: Invalid arguments for operation" (lambda () (apply-op 'j (list (BoolV #t) (NumV 0)))))
 (check-equal? (apply-func 'equals? (list (NumV 5) (NumV 6))) (BoolV #f))
-
-;interp test cases
-(check-equal? (interp (BinOpC '+ (AppC (LambC (list 'x 'y) (BinOpC '+ (IdC 'x) (IdC 'y))) (list (NumC 3) (NumC 5))) (NumC 2)) top-env) (NumV 10))
-
-(check-exn #rx"ZODE: Expected LambC" (lambda () (interp (BinOpC '+ (AppC (NumC 4) (list (NumC 3) (NumC 5))) (NumC 2)) top-env)))
-(check-exn #rx"ZODE: Number of Argument" (lambda () (interp (BinOpC '+ (AppC (LambC (list 'x 'y) (BinOpC '+ (IdC 'x) (IdC 'y))) (list (NumC 3) (NumC 5) (NumC 5))) (NumC 2)) top-env)))
-
-
-(check-equal? (interp (BinOpC '- (NumC 1) (NumC 2)) top-env) (NumV -1))
-(check-equal? (interp (BinOpC '* (NumC 1) (NumC 2)) top-env) (NumV 2))
-(check-equal? (interp (BinOpC '/ (NumC 1) (NumC 2)) top-env) (NumV 1/2))
-(check-equal? (interp (IfLeqZeroC (NumC -1) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) top-env) (NumV 3))
-(check-equal? (interp (IfLeqZeroC (NumC 2) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) top-env) (NumV 1))
