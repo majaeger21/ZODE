@@ -137,7 +137,11 @@ Input: ExprC Env, Output: Value
 
 (define top-env : Environment (list
                  (Binding 'true (BoolV #t))
-                 (Binding 'false (BoolV #f))))
+                 (Binding 'false (BoolV #f))
+                 (Binding '+ (PrimV '+))
+                 (Binding '- (PrimV '-))
+                 (Binding '* (PrimV '*))
+                 (Binding '/ (PrimV '/))))
 
 ;getFunDef
 ;;gets a function defintion by its ID defined by AppC
@@ -169,7 +173,7 @@ Input: ExprC Env, Output: Value
 (define (interp [exp : ExprC] [env : Environment]) : Value
   (match exp
     [(NumC n) (NumV n)]
-    [(BinOpC s l r) (match s
+    #;[(BinOpC s l r) (match s
                       ['+ (apply-func '+ (list (interp l env) (interp r env)))]
                       ['* (apply-func '* (list (interp l env) (interp r env)))]
                       ['- (apply-func '- (list (interp l env) (interp r env)))]
@@ -184,11 +188,15 @@ Input: ExprC Env, Output: Value
     [(AppC expr args) (let ([clo (let ([temp-clo (interp expr env)])
                                     (cond
                                       [(CloV? temp-clo) (cast temp-clo CloV)]
+                                      [(PrimV? temp-clo) (cast temp-clo PrimV)]
                                       [else (error 'interp "ZODE: Expected LambC, got ~e" temp-clo)]))])
-                     (cond
-                       [(= (length args) (length (CloV-args clo))) (interp (CloV-body clo) (add-env (CloV-env clo) args (CloV-args clo)))]
-                       [else (error 'interp "ZODE: Number of Argument Mismatch, expected
-                               ~e, got ~e" (length (CloV-args clo)) (length args))]))]
+                     (match clo
+                       [(? CloV?)(cond
+                         [(= (length args) (length (CloV-args clo))) (interp (CloV-body clo) (add-env (CloV-env clo) args (CloV-args clo)))]
+                         [else (error 'interp "ZODE: Number of Argument Mismatch, expected
+                               ~e, got ~e" (length (CloV-args clo)) (length args))])]
+                       [(? PrimV?) (PrimV 'x)]))]
+    
     [(LambC params expr) (CloV params expr env)]
     [(IdC s) (interp-id s env)]
     ))
