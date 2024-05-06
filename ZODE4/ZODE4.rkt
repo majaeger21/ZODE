@@ -5,7 +5,7 @@
 #|Project Status: FULLY IMPLEMENTED|#
 
 #|ZODE4 Data Types|#
-(define-type ExprC (U NumC IdC StrC IfC LambC AppC IfLeqZeroC BinOpC))
+(define-type ExprC (U NumC IdC StrC IfC LambC AppC IfLeqZeroC))
 (struct NumC ([n : Real]) #:transparent)
 (struct IdC ([s : Symbol]) #:transparent)
 (struct StrC ([s : String]) #:transparent)
@@ -143,17 +143,6 @@ Input: ExprC Env, Output: Value
                  (Binding '* (PrimV '*))
                  (Binding '/ (PrimV '/))))
 
-;getFunDef
-;;gets a function defintion by its ID defined by AppC
-(define (getFunDef [f : Symbol] [defs : (Listof FundefC)]) : FundefC
-  (cond
-    [(empty? defs) (error 'getFunDef "ZODE: Function Application Error: Function ~e does not exist" f)]
-    [(equal? (FundefC-name (first defs)) f) (first defs)]
-    [else (getFunDef f (rest defs))]))
-
-
-
-
 
 ;;add-env
 (define (add-env [env : Environment] [args : (Listof ExprC)] [params : (Listof Symbol)]) : Environment
@@ -168,17 +157,17 @@ Input: ExprC Env, Output: Value
     [(equal? s (Binding-name (first env))) (Binding-val (first env))]
     [else (interp-id s (rest env))]))
 
+;;interp-args
+(define (interp-args [args : (Listof ExprC)] [env : Environment]) : (Listof Value)
+  (cond
+    [(empty? args) '()]
+    [else (cons (interp (first args) env)(interp-args (rest args) env))]))
+
 ;interp
 ;;accepts an ExprC and a list of function definitions and returns a Real number (the value)
 (define (interp [exp : ExprC] [env : Environment]) : Value
   (match exp
     [(NumC n) (NumV n)]
-    #;[(BinOpC s l r) (match s
-                      ['+ (apply-func '+ (list (interp l env) (interp r env)))]
-                      ['* (apply-func '* (list (interp l env) (interp r env)))]
-                      ['- (apply-func '- (list (interp l env) (interp r env)))]
-                      ['/ (let ([il (interp l env)] [ir (interp r env)])
-                            (apply-func '/ (list il ir)))])]
     [(IfLeqZeroC c i e) (cond
                           [(<= (NumV-n (let ([num (interp c env)])
                                          (cond
@@ -189,31 +178,30 @@ Input: ExprC Env, Output: Value
                                     (cond
                                       [(CloV? temp-clo) (cast temp-clo CloV)]
                                       [(PrimV? temp-clo) (cast temp-clo PrimV)]
-                                      [else (error 'interp "ZODE: Expected LambC, got ~e" temp-clo)]))])
+                                      [else (error 'interp "ZODE: Expected CloV or PrimV, got ~e" temp-clo)]))])
                      (match clo
                        [(? CloV?)(cond
                          [(= (length args) (length (CloV-args clo))) (interp (CloV-body clo) (add-env (CloV-env clo) args (CloV-args clo)))]
                          [else (error 'interp "ZODE: Number of Argument Mismatch, expected
                                ~e, got ~e" (length (CloV-args clo)) (length args))])]
-                       [(? PrimV?) (PrimV 'x)]))]
+                       [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env))]))]
     
     [(LambC params expr) (CloV params expr env)]
-    [(IdC s) (interp-id s env)]
-    ))
+    [(IdC s) (interp-id s env)]))
 
 
 ;interp test cases
-(check-equal? (interp (BinOpC '+ (AppC (LambC (list 'x 'y) (BinOpC '+ (IdC 'x) (IdC 'y))) (list (NumC 3) (NumC 5))) (NumC 2)) top-env) (NumV 10))
+(check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+) (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5))) (NumC 2))) top-env) (NumV 10))
 
-(check-exn #rx"ZODE: Expected LambC" (lambda () (interp (BinOpC '+ (AppC (NumC 4) (list (NumC 3) (NumC 5))) (NumC 2)) top-env)))
-(check-exn #rx"ZODE: Number of Argument" (lambda () (interp (BinOpC '+ (AppC (LambC (list 'x 'y) (BinOpC '+ (IdC 'x) (IdC 'y))) (list (NumC 3) (NumC 5) (NumC 5))) (NumC 2)) top-env)))
+(check-exn #rx"ZODE: Expected CloV" (lambda () (interp (AppC (IdC '+) (list (AppC (NumC 4) (list (NumC 3) (NumC 5))) (NumC 2))) top-env)))
+(check-exn #rx"ZODE: Number of Argument" (lambda () (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+) (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5) (NumC 5))) (NumC 2))) top-env)))
 
 
-(check-equal? (interp (BinOpC '- (NumC 1) (NumC 2)) top-env) (NumV -1))
-(check-equal? (interp (BinOpC '* (NumC 1) (NumC 2)) top-env) (NumV 2))
-(check-equal? (interp (BinOpC '/ (NumC 1) (NumC 2)) top-env) (NumV 1/2))
-(check-equal? (interp (IfLeqZeroC (NumC -1) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) top-env) (NumV 3))
-(check-equal? (interp (IfLeqZeroC (NumC 2) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) top-env) (NumV 1))
+(check-equal? (interp (AppC (IdC '-) (list (NumC 1) (NumC 2))) top-env) (NumV -1))
+(check-equal? (interp (AppC (IdC '*) (list (NumC 1) (NumC 2))) top-env) (NumV 2))
+(check-equal? (interp (AppC (IdC '/) (list (NumC 1) (NumC 2))) top-env) (NumV 1/2))
+(check-equal? (interp (IfLeqZeroC (NumC -1) (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
+(check-equal? (interp (IfLeqZeroC (NumC 2) (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 1))
 
 
 
