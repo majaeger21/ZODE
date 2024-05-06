@@ -98,10 +98,9 @@ Input: Sexp, Output: ExprC
 
 (define (equals? [a : Any] [b : Any]) : Boolean
   (match* (a b)
-    [((NumV n1) (NumV n2)) (= n1 n2)]))
-  #;(and (not (or (PrimV? a) (CloV? a)))
-       (not (or (PrimV? b) (CloV? b)))
-       (equal? a b))
+    [((NumV n1) (NumV n2)) (= n1 n2)]
+    [((StrV s1) (StrV s2)) (equal? s1 s2)]
+    [((BoolV b1) (BoolV b2)) (equal? b1 b2)]))
 
 (define (user-error [v : Value]) : Nothing
   (error 'user-error (serialize v)))
@@ -225,6 +224,8 @@ Input: ExprC Env, Output: Value
 (check-exn #rx"ZODE: Invalid arguments for operation" (lambda () (apply-op 'j (list (BoolV #t) (NumV 0)))))
 (check-equal? (apply-func 'equals? (list (NumV 5) (NumV 6))) (BoolV #f))
 (check-equal? (apply-func 'equals? (list (NumV 6) (NumV 6))) (BoolV #t))
+(check-equal? (apply-func 'equals? (list (StrV 'hi) (StrV 'hi))) (BoolV #t))
+(check-equal? (apply-func 'equals? (list (BoolV #t) (BoolV #f))) (BoolV #f))
 (check-exn #rx"ZODE: Wrong amount of args" (lambda () (apply-func 'equals? (list (NumV 5) (NumV 6) (NumV 3)))))
 
 
