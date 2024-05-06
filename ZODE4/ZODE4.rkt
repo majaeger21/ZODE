@@ -75,7 +75,7 @@ Input: Sexp, Output: ExprC
     [(equal? op '*) (apply-op '* args)]
     [(equal? op '/) (apply-op '/ args)]
     [(equal? op '<=) (apply-op '<= args)]
-    [(equal? op 'equals?) (apply-equal-op args)]
+    [(equal? op 'equals?) (BoolV (equals? (first args) (rest args)))]
     [else (error "ZODE: Unknown operator, got: ~e" op)]))
 
 (define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
@@ -92,21 +92,13 @@ Input: Sexp, Output: ExprC
        [else (error "ZODE: Unknown operator, got: ~e" op)])]
     [else (error "ZODE: Invalid arguments for operation")]))
 
-(define (apply-equal-op [args : (Listof Value)]) : Value
-  (match args
-    [(list a b) (BoolV (and (not (or (PrimV? a) (CloV? a)))
-                            (not (or (PrimV? b) (CloV? b)))
-                            (equal-no-errors a b)))]
-    [else (error "ZODE: Invalid arguments for equality comparison operation")]))
-
-(define (equal-no-errors [a : Any] [b : Any]) : Boolean
-  (cond
-    [(real? a) (cond [(real? b) (equal? a b)]
-                     [else #f])]
-    [else #f]))
+(define (equals? [a : Any] [b : Any]) : Boolean
+  (and (not (or (PrimV? a) (CloV? a)))
+       (not (or (PrimV? b) (CloV? b)))
+       (equal? a b)))
 
 (define (user-error [v : Value]) : Nothing
-  (error 'user-error (~v v)))  ; TODO: change this to serialize v
+  (error 'user-error (serialize v)))
 
 
 
@@ -173,7 +165,7 @@ Input: ExprC Env, Output: Value
 (define (interp [exp : ExprC] [env : Environment]) : Value
   (match exp
     [(NumC n) (NumV n)]
-    #;[(BinOpC s l r) (match s
+    [(BinOpC s l r) (match s
                       ['+ (apply-func '+ (list (interp l env) (interp r env)))]
                       ['* (apply-func '* (list (interp l env) (interp r env)))]
                       ['- (apply-func '- (list (interp l env) (interp r env)))]
@@ -202,23 +194,6 @@ Input: ExprC Env, Output: Value
     ))
 
 
-;interp test cases
-(check-equal? (interp (BinOpC '+ (AppC (LambC (list 'x 'y) (BinOpC '+ (IdC 'x) (IdC 'y))) (list (NumC 3) (NumC 5))) (NumC 2)) top-env) (NumV 10))
-
-(check-exn #rx"ZODE: Expected LambC" (lambda () (interp (BinOpC '+ (AppC (NumC 4) (list (NumC 3) (NumC 5))) (NumC 2)) top-env)))
-(check-exn #rx"ZODE: Number of Argument" (lambda () (interp (BinOpC '+ (AppC (LambC (list 'x 'y) (BinOpC '+ (IdC 'x) (IdC 'y))) (list (NumC 3) (NumC 5) (NumC 5))) (NumC 2)) top-env)))
-
-
-(check-equal? (interp (BinOpC '- (NumC 1) (NumC 2)) top-env) (NumV -1))
-(check-equal? (interp (BinOpC '* (NumC 1) (NumC 2)) top-env) (NumV 2))
-(check-equal? (interp (BinOpC '/ (NumC 1) (NumC 2)) top-env) (NumV 1/2))
-(check-equal? (interp (IfLeqZeroC (NumC -1) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) top-env) (NumV 3))
-(check-equal? (interp (IfLeqZeroC (NumC 2) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) top-env) (NumV 1))
-
-
-
-
-
 
 #|TEST CASES|#
 ;;Parse
@@ -229,17 +204,17 @@ Input: ExprC Env, Output: Value
 (check-equal? (parse '{if : 3 : 4 : 5}) (IfC (NumC 3) (NumC 4) (NumC 5)))
 (check-equal? (parse-clauses '{x = 12}) (list (list 'x) (list (NumC 12))))
 (check-equal? (parse-clauses '{x = 12 : y = 3}) (list (list 'x 'y) (list (NumC 12) (NumC 3))))
-#;(check-equal? (parse '{locals : x = 12 : {+ x 1}}) (AppC (LambC (list 'x) (AppC (IdC '+)
+(check-equal? (parse '{locals : x = 12 : {+ x 1}}) (AppC (LambC (list 'x) (AppC (IdC '+)
                                                                                 (list (IdC 'x)
                                                                                       (NumC 1))))
                                                          (list (NumC 12))))
-#;(check-equal? (parse '{{lamb : x : {+ x 1}} 12}) (AppC (LambC (list 'x) (AppC (IdC '+)
+(check-equal? (parse '{{lamb : x : {+ x 1}} 12}) (AppC (LambC (list 'x) (AppC (IdC '+)
                                                                          (list (IdC 'x)
                                                                                (NumC 1))))
                                                   (list (NumC 12))))
 
-;(check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{if : 3 : 4 : 'locals})))
-;(check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{{lamb : x locals : {+ x 1}} 12})))
+(check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{if : 3 : 4 : 'locals})))
+(check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{{lamb : x locals : {+ x 1}} 12})))
 (check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse '{})))
 (check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse-clauses '{})))
 
@@ -257,3 +232,15 @@ Input: ExprC Env, Output: Value
 (check-exn #rx"ZODE: Invalid arguments for operation" (lambda () (apply-op 'j (list (BoolV #t) (NumV 0)))))
 (check-equal? (apply-func 'equals? (list (NumV 5) (NumV 6))) (BoolV #f))
 
+;interp test cases
+(check-equal? (interp (BinOpC '+ (AppC (LambC (list 'x 'y) (BinOpC '+ (IdC 'x) (IdC 'y))) (list (NumC 3) (NumC 5))) (NumC 2)) top-env) (NumV 10))
+
+(check-exn #rx"ZODE: Expected LambC" (lambda () (interp (BinOpC '+ (AppC (NumC 4) (list (NumC 3) (NumC 5))) (NumC 2)) top-env)))
+(check-exn #rx"ZODE: Number of Argument" (lambda () (interp (BinOpC '+ (AppC (LambC (list 'x 'y) (BinOpC '+ (IdC 'x) (IdC 'y))) (list (NumC 3) (NumC 5) (NumC 5))) (NumC 2)) top-env)))
+
+
+(check-equal? (interp (BinOpC '- (NumC 1) (NumC 2)) top-env) (NumV -1))
+(check-equal? (interp (BinOpC '* (NumC 1) (NumC 2)) top-env) (NumV 2))
+(check-equal? (interp (BinOpC '/ (NumC 1) (NumC 2)) top-env) (NumV 1/2))
+(check-equal? (interp (IfLeqZeroC (NumC -1) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) top-env) (NumV 3))
+(check-equal? (interp (IfLeqZeroC (NumC 2) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) top-env) (NumV 1))
