@@ -62,10 +62,10 @@ Input: Sexp, Output: ExprC
 (struct PrimV ([p : Symbol]) #:transparent)
 (struct CloV ([args : (Listof Symbol)] [body : ExprC] [env : Environment]) #:transparent)
 
-;(struct Binding ([name : Symbol] [val : Value]) #:transparent)
+(struct Binding ([name : Symbol] [val : Value]) #:transparent)
 
 ;temp
-(struct Binding ([name : Symbol] [val : Real]) #:transparent)
+;(struct Binding ([name : Symbol] [val : Real]) #:transparent)
 
 
 (define-type Environment (Listof Binding))
@@ -116,10 +116,20 @@ Serialize
 Input: ZODE4 Value, Output: String
 |#
 
+(define (serialize (v : Value)) : String
+  (match v
+    [(NumV n) (~v n)]
+    [(BoolV b) (if b "true" "false")]
+    [(StrV s) (~v s)]
+    [(CloV _ _ _) "#<procedure>"]
+    [(PrimV op) (format "#<primop>")]))
+
 #|
 Interpreter
 Input: ExprC Env, Output: Value
 |#
+
+
 
 ;getFunDef
 ;;gets a function defintion by its ID defined by AppC
@@ -144,7 +154,7 @@ Input: ExprC Env, Output: Value
     [else (cons (Binding (first params) (interp (first args) funs env)) (add-env env (rest args) (rest params) funs))]))
 
 ;;interp-IdC
-(define (interp-id [s : Symbol] [funs : (Listof FundefC)] [env : Environment]) : Real
+(define (interp-id [s : Symbol] [funs : (Listof FundefC)] [env : Environment]) : Value
   (cond
     [(empty? env) (error 'interp-id "ZODE: No parameter matching id: ~e" s)]
     [(equal? s (Binding-name (first env))) (Binding-val (first env))]
@@ -152,19 +162,20 @@ Input: ExprC Env, Output: Value
 
 ;interp
 ;;accepts an ExprC and a list of function definitions and returns a Real number (the value)
-(define (interp [exp : ExprC] [funs : (Listof FundefC)] [env : Environment]) : Real
+(define (interp [exp : ExprC] [funs : (Listof FundefC)] [env : Environment]) : Value
   (match exp
-    [(NumC n) n]
+    [(NumC n) (NumV n)]
     [(BinOpC s l r) (match s
-                      ['+ (+ (interp l funs env) (interp r funs env))]
-                      ['* (* (interp l funs env) (interp r funs env))]
-                      ['- (- (interp l funs env) (interp r funs env))]
+                      ['+ (apply-func '+ (list (interp l funs env) (interp r funs env)))]
+                      ['* (apply-func '* (list (interp l funs env) (interp r funs env)))]
+                      ['- (apply-func '- (list (interp l funs env) (interp r funs env)))]
                       ['/ (let ([il (interp l funs env)] [ir (interp r funs env)])
-                            (cond
-                              [(equal? ir 0) (error 'interp "ZODE: Divide By Zero Error")]
-                              [else (/ (interp l funs env) (interp r funs env))]))])]
+                            (apply-func '/ (list il ir)))])]
     [(IfLeqZeroC c i e) (cond
-                          [(<= (interp c funs env) 0) (interp i funs env)]
+                          [(<= (NumV-n (let ([num (interp c funs env)])
+                                         (cond
+                                           [(NumV? num) (cast num NumV)]
+                                           [else (error 'interp "ZODE: Type Mismatch, Expected Real, got ~e" num)]))) 0) (interp i funs env)]
                           [else (interp e funs env)])]
     [(AppC s args) (let ([fd (getFunDef s funs)])
                      (cond
@@ -176,28 +187,28 @@ Input: ExprC Env, Output: Value
 
 
 ;interp test cases
-(check-equal? (interp (BinOpC '+ (NumC 1) (NumC 2)) (list (FundefC 'main '() (BinOpC '+ (NumC 1) (NumC 2)) )) '()) 3)
-(check-equal? (interp (BinOpC '- (NumC 1) (NumC 2)) (list (FundefC 'main '() (BinOpC '- (NumC 1) (NumC 2)) )) '()) -1)
-(check-equal? (interp (BinOpC '* (NumC 1) (NumC 2)) (list (FundefC 'main '() (BinOpC '* (NumC 1) (NumC 2)) )) '()) 2)
-(check-equal? (interp (BinOpC '/ (NumC 1) (NumC 2)) (list (FundefC 'main '() (BinOpC '/ (NumC 1) (NumC 2)) )) '()) 1/2)
+(check-equal? (interp (BinOpC '+ (NumC 1) (NumC 2)) (list (FundefC 'main '() (BinOpC '+ (NumC 1) (NumC 2)) )) '()) (NumV 3))
+(check-equal? (interp (BinOpC '- (NumC 1) (NumC 2)) (list (FundefC 'main '() (BinOpC '- (NumC 1) (NumC 2)) )) '()) (NumV -1))
+(check-equal? (interp (BinOpC '* (NumC 1) (NumC 2)) (list (FundefC 'main '() (BinOpC '* (NumC 1) (NumC 2)) )) '()) (NumV 2))
+(check-equal? (interp (BinOpC '/ (NumC 1) (NumC 2)) (list (FundefC 'main '() (BinOpC '/ (NumC 1) (NumC 2)) )) '()) (NumV 1/2))
 (check-equal? (interp (IfLeqZeroC (NumC -1) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) (list (FundefC 'main '()
-       (IfLeqZeroC (NumC -1) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) ) )'()) 3)
+       (IfLeqZeroC (NumC -1) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) ) )'()) (NumV 3))
 (check-equal? (interp (IfLeqZeroC (NumC 2) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) (list (FundefC 'main '()
-        (IfLeqZeroC (NumC 2) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) )) '()) 1)
+        (IfLeqZeroC (NumC 2) (BinOpC '+ (NumC 1) (NumC 2)) (NumC 1)) )) '()) (NumV 1))
 
 
 
 
 ;interp-fns
 ;;accepts a list of functions and interprets the function called main
-(define (interp-fns [funs : (Listof FundefC)]) : Real
+(define (interp-fns [funs : (Listof FundefC)]) : Value
   (interp (FundefC-body (getFunDef 'main funs)) funs '()))
 
 ;interp-fns tests
 (check-equal? (interp-fns (list (FundefC 'f (list 'x 'y)
                                          (BinOpC '+ (IdC 'x) (IdC 'y)))
                                 (FundefC 'main '()
-                                         (AppC 'f (list (NumC 1) (NumC 2)))))) 3)
+                                         (AppC 'f (list (NumC 1) (NumC 2)))))) (NumV 3))
 
 (check-exn #rx"ZODE: Number of Argument Mismatch"
            (lambda () (interp-fns (list (FundefC 'f (list 'x 'y 'z)
