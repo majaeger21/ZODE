@@ -48,6 +48,7 @@ Input: Sexp, Output: ExprC
                      [else (cons (first lst) (parse-ids (rest lst)))])]
     [else (error "ZODE: Parameter not recognized")]))
 
+
 (define (parse-clauses [exp : Sexp]) : (List (Listof Symbol) (Listof ExprC))
   (match exp
     [(list (? is-valid-identifier? id) '= exp) (list (list id) (list (parse exp)))]
@@ -75,7 +76,10 @@ Input: Sexp, Output: ExprC
     [(equal? op '*) (apply-op '* args)]
     [(equal? op '/) (apply-op '/ args)]
     [(equal? op '<=) (apply-op '<= args)]
-    [(equal? op 'equals?) (BoolV (equals? (first args) (rest args)))]
+    [(equal? op 'equals?)
+     (cond
+       [(equal? (length args) 2) (BoolV (equals? (first args) (first (rest args))))]
+       [else (error "ZODE: Wrong amount of args")])]
     [else (error "ZODE: Unknown operator, got: ~e" op)]))
 
 (define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
@@ -93,9 +97,11 @@ Input: Sexp, Output: ExprC
     [else (error "ZODE: Invalid arguments for operation")]))
 
 (define (equals? [a : Any] [b : Any]) : Boolean
-  (and (not (or (PrimV? a) (CloV? a)))
+  (match* (a b)
+    [((NumV n1) (NumV n2)) (= n1 n2)]))
+  #;(and (not (or (PrimV? a) (CloV? a)))
        (not (or (PrimV? b) (CloV? b)))
-       (equal? a b)))
+       (equal? a b))
 
 (define (user-error [v : Value]) : Nothing
   (error 'user-error (serialize v)))
@@ -182,25 +188,6 @@ Input: ExprC Env, Output: Value
     [(IdC s) (interp-id s env)]))
 
 
-;interp test cases
-(check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+) (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5))) (NumC 2))) top-env) (NumV 10))
-
-(check-exn #rx"ZODE: Expected CloV" (lambda () (interp (AppC (IdC '+) (list (AppC (NumC 4) (list (NumC 3) (NumC 5))) (NumC 2))) top-env)))
-(check-exn #rx"ZODE: Number of Argument" (lambda () (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+) (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5) (NumC 5))) (NumC 2))) top-env)))
-
-
-(check-equal? (interp (AppC (IdC '-) (list (NumC 1) (NumC 2))) top-env) (NumV -1))
-(check-equal? (interp (AppC (IdC '*) (list (NumC 1) (NumC 2))) top-env) (NumV 2))
-(check-equal? (interp (AppC (IdC '/) (list (NumC 1) (NumC 2))) top-env) (NumV 1/2))
-(check-equal? (interp (AppC (IdC 'equals?) (list (NumC 3) (AppC (IdC '+) (list (NumC 1) (NumC 2))))) top-env) (BoolV #t))
-(check-equal? (interp (IfLeqZeroC (NumC 2) (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 1))
-
-
-
-
-
-
-
 #|TEST CASES|#
 ;;Parse
 (check-equal? (parse 5) (NumC 5))
@@ -237,3 +224,20 @@ Input: ExprC Env, Output: Value
 (check-exn #rx"ZODE: Unknown operator, got: " (lambda () (apply-op 'j (list (NumV 3) (NumV 0)))))
 (check-exn #rx"ZODE: Invalid arguments for operation" (lambda () (apply-op 'j (list (BoolV #t) (NumV 0)))))
 (check-equal? (apply-func 'equals? (list (NumV 5) (NumV 6))) (BoolV #f))
+(check-equal? (apply-func 'equals? (list (NumV 6) (NumV 6))) (BoolV #t))
+(check-exn #rx"ZODE: Wrong amount of args" (lambda () (apply-func 'equals? (list (NumV 5) (NumV 6) (NumV 3)))))
+
+
+;interp test cases
+(check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+) (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5))) (NumC 2))) top-env) (NumV 10))
+
+(check-exn #rx"ZODE: Expected CloV" (lambda () (interp (AppC (IdC '+) (list (AppC (NumC 4) (list (NumC 3) (NumC 5))) (NumC 2))) top-env)))
+(check-exn #rx"ZODE: Number of Argument" (lambda () (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+) (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5) (NumC 5))) (NumC 2))) top-env)))
+
+
+(check-equal? (interp (AppC (IdC '-) (list (NumC 1) (NumC 2))) top-env) (NumV -1))
+(check-equal? (interp (AppC (IdC '*) (list (NumC 1) (NumC 2))) top-env) (NumV 2))
+(check-equal? (interp (AppC (IdC '/) (list (NumC 1) (NumC 2))) top-env) (NumV 1/2))
+(check-equal? (interp (AppC (IdC '+) (list (NumC 1) (NumC 2))) top-env) (NumV 3))
+;(check-equal? (interp (AppC (IdC 'equals?) (list (NumC 3) (AppC (IdC '+) (list (NumC 1) (NumC 2))))) top-env) (BoolV #t))
+(check-equal? (interp (IfLeqZeroC (NumC 2) (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 1))
