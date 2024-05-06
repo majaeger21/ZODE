@@ -75,7 +75,7 @@ Input: Sexp, Output: ExprC
     [(equal? op '*) (apply-op '* args)]
     [(equal? op '/) (apply-op '/ args)]
     [(equal? op '<=) (apply-op '<= args)]
-    [(equal? op 'equals?) (apply-equal-op args)]
+    [(equal? op 'equal?) (apply-equal-op args)]
     [else (error "ZODE: Unknown operator, got: ~e" op)]))
 
 (define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
@@ -106,15 +106,13 @@ Input: Sexp, Output: ExprC
     [else #f]))
 
 (define (user-error [v : Value]) : Nothing
-  (error 'user-error (~v v)))  ; TODO: change this to serialize v
+  (error 'user-error (serialize v)))  ; TODO: change this to serialize v
 
 
 
 ;;temp
-(struct FundefC ([name : Symbol] [args : (Listof Symbol)] [body : ExprC]) #:transparent)
-(struct BinOpC ( [operator : Symbol] [left : ExprC] [right : ExprC]) #:transparent)
 (struct IfLeqZeroC ([cond : ExprC] [then : ExprC] [else : ExprC]) #:transparent)
-;(struct AppC ([fun : Symbol] [args : (Listof ExprC)]))
+
 
 
 #|
@@ -141,7 +139,9 @@ Input: ExprC Env, Output: Value
                  (Binding '+ (PrimV '+))
                  (Binding '- (PrimV '-))
                  (Binding '* (PrimV '*))
-                 (Binding '/ (PrimV '/))))
+                 (Binding '/ (PrimV '/))
+                 (Binding '<= (PrimV '<=))
+                 (Binding 'equal? (PrimV 'equal?))))
 
 
 ;;add-env
@@ -200,8 +200,9 @@ Input: ExprC Env, Output: Value
 (check-equal? (interp (AppC (IdC '-) (list (NumC 1) (NumC 2))) top-env) (NumV -1))
 (check-equal? (interp (AppC (IdC '*) (list (NumC 1) (NumC 2))) top-env) (NumV 2))
 (check-equal? (interp (AppC (IdC '/) (list (NumC 1) (NumC 2))) top-env) (NumV 1/2))
-(check-equal? (interp (IfLeqZeroC (NumC -1) (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
+(check-equal? (interp (AppC (IdC 'equal?) (list (NumC 3) (AppC (IdC '+) (list (NumC 1) (NumC 2))))) top-env) (BoolV #t))
 (check-equal? (interp (IfLeqZeroC (NumC 2) (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 1))
+
 
 
 
