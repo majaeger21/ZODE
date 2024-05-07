@@ -60,7 +60,6 @@ Input: Sexp, Output: ExprC
     [(list 'if ': cond ': then ': else) (IfC (parse cond) (parse then) (parse else))]
     [(list 'locals ': cls ... ': exp) (let ([clauses (parse-clauses (cast cls (Listof Sexp)))])
                                         (AppC (LambC (first clauses) (parse exp)) (second clauses)))]
-    #;[(list 'lamb ': id ... ': exp) (LambC (parse-ids (cast id (Listof Symbol))) (parse exp))]
     [(list 'lamb ': id ... ': exp)  
      (unless (andmap symbol? id)  
        (error "ZODE: identifier cannot be a number, got: ~e" exp))
@@ -72,6 +71,8 @@ Input: Sexp, Output: ExprC
        [else (IdC i)])]
     [other (error 'parse "ZODE: expected valid expression, got: ~e" other)]))
 
+#;'(parse '(locals : z = (lamb : : 3) : z = 9 : (z)))
+"ZODE: duplicate identifier found: ~e"
 
 (define (parse-ids [lst : (Listof Symbol)]) : (Listof Symbol)
   (cond 
@@ -82,6 +83,18 @@ Input: Sexp, Output: ExprC
             [else (cons (first lst) (parse-ids (rest lst)))])]))
 
 (define (parse-clauses [exp : Sexp]) : (List (Listof Symbol) (Listof ExprC))
+  (match exp
+    [(list (? is-valid-identifier? id) '= exp) (list (list id) (list (parse exp)))]
+    [(list (? is-valid-identifier? id) '= exp ': cls ...)
+     (let ([res (parse-clauses cls)])
+       (if (unique-args? (cons id (first res)))
+           (list (cons id (first res)) (cons (parse exp) (second res)))
+           (error "ZODE: duplicate identifier found: ~e" id)))]
+    [other
+     (error 'parse-clauses "ZODE: expected valid expression, got: ~e" other)]))
+
+
+#;(define (parse-clauses [exp : Sexp]) : (List (Listof Symbol) (Listof ExprC))
   (match exp
     [(list (? is-valid-identifier? id) '= exp) (list (list id) (list (parse exp)))]
     [(list (? is-valid-identifier? id) '= exp ': cls ...) (let ([res (parse-clauses cls)])
@@ -240,7 +253,7 @@ Input: ExprC Env, Output: Value
                                                                          (list (IdC 'x)
                                                                                (NumC 1))))
                                                   (list (NumC 12))))
-
+(check-exn #rx"ZODE: duplicate identifier found: " (lambda () (parse '(locals : z = (lamb : : 3) : z = 9 : (z)))))
 
 
 (check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{if : 3 : 4 : 'locals})))
