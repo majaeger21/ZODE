@@ -36,7 +36,7 @@
                  (Binding '* (PrimV '*))
                  (Binding '/ (PrimV '/))
                  (Binding '<= (PrimV '<=))
-                 (Binding 'equals? (PrimV 'equals?))
+                 (Binding 'equal? (PrimV 'equal?))
                  (Binding 'error (PrimV 'error))))
 
 #| Parses an Expression
@@ -110,7 +110,7 @@
     [(equal? op '/) (apply-op '/ args)]
     [(equal? op '<=) (apply-op '<= args)]
     [(equal? op 'error) (apply-op 'error args)]
-    [(equal? op 'equals?)
+    [(equal? op 'equal?)
      (cond
        [(equal? (length args) 2) (BoolV (equals? (first args) (first (rest args))))]
        [else (error "ZODE: Wrong amount of args")])]
@@ -136,9 +136,9 @@
     [((NumV n1) (NumV n2)) (equal? n1 n2)]
     [((StrV s1) (StrV s2)) (equal? s1 s2)]
     [((BoolV b1) (BoolV b2)) (equal? b1 b2)]
-    [((PrimV s1) (PrimV s2)) (equal? s1 s2)]
-    [((CloV args1 body1 env1) (CloV args2 body2 env2)) (and
-                                        (equal? args1 args2) (equal? body1 body2))]))
+    [((PrimV s1) (PrimV s2)) #f]
+    [((CloV args1 body1 env1) (CloV args2 body2 env2)) #f]
+    [(_ _) #f]))
 
 
 
@@ -150,12 +150,15 @@ Input: ZODE4 Value, Output: String
   (match v
     [(NumV n) (~v n)]
     [(BoolV b) (if b "true" "false")]
-    [(StrV s) s]
+    [(StrV s) (~v s)]
     [(CloV _ _ _) "#<procedure>"]
     [(PrimV op) (format "#<primop>")]))
 
 (define (user-error [v : Value]) : Nothing
   (error 'user-error (serialize v)))
+
+;your code failed a test: (top-interp (quote (if : true : "one" : "two"))) evaluated to "one", expecting "\"one\""
+;Saving submission with errors.
 
 #|
 Interpreter
@@ -262,11 +265,11 @@ Input: ExprC Env, Output: Value
 (check-exn #rx"ZODE: Unknown operator, got: " (lambda () (apply-func 'j (list (NumV 3) (NumV 0)))))
 (check-exn #rx"ZODE: Unknown operator, got: " (lambda () (apply-op 'j (list (NumV 3) (NumV 0)))))
 (check-exn #rx"ZODE: Invalid arguments for operation" (lambda () (apply-op 'j (list (BoolV #t) (NumV 0)))))
-(check-equal? (apply-func 'equals? (list (NumV 5) (NumV 6))) (BoolV #f))
-(check-equal? (apply-func 'equals? (list (NumV 6) (NumV 6))) (BoolV #t))
-(check-equal? (apply-func 'equals? (list (StrV "hi") (StrV "hi"))) (BoolV #t))
-(check-equal? (apply-func 'equals? (list (BoolV #t) (BoolV #f))) (BoolV #f))
-(check-exn #rx"ZODE: Wrong amount of args" (lambda () (apply-func 'equals? (list (NumV 5)
+(check-equal? (apply-func 'equal? (list (NumV 5) (NumV 6))) (BoolV #f))
+(check-equal? (apply-func 'equal? (list (NumV 6) (NumV 6))) (BoolV #t))
+(check-equal? (apply-func 'equal? (list (StrV "hi") (StrV "hi"))) (BoolV #t))
+(check-equal? (apply-func 'equal? (list (BoolV #t) (BoolV #f))) (BoolV #f))
+(check-exn #rx"ZODE: Wrong amount of args" (lambda () (apply-func 'equal? (list (NumV 5)
                                                                                  (NumV 6) (NumV 3)))))
 
 
@@ -285,40 +288,58 @@ Input: ExprC Env, Output: Value
 (check-equal? (interp (AppC (IdC '*) (list (NumC 1) (NumC 2))) top-env) (NumV 2))
 (check-equal? (interp (AppC (IdC '/) (list (NumC 1) (NumC 2))) top-env) (NumV 1/2))
 (check-equal? (interp (AppC (IdC '+) (list (NumC 1) (NumC 2))) top-env) (NumV 3))
-(check-equal? (interp (AppC (IdC 'equals?) (list (NumC 3) (AppC (IdC '+) (list
+(check-equal? (interp (AppC (IdC 'equal?) (list (NumC 3) (AppC (IdC '+) (list
                                                      (NumC 1) (NumC 2))))) top-env) (BoolV #t))
-(check-equal? (interp (IfC (AppC (IdC 'equals?) (list (NumC 3) (NumC 3))) (AppC (IdC '+)
+(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (NumC 3) (NumC 3))) (AppC (IdC '+)
                                                 (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
-(check-equal? (interp (IfC (AppC (IdC 'equals?) (list (StrC "my string") (StrC "my string")))
+(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (StrC "my string") (StrC "my string")))
                           (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
-(check-equal? (interp (IfC (AppC (IdC 'equals?) (list (IdC 'false) (IdC 'false)))
+(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (IdC 'false) (IdC 'false)))
                            (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
-(check-equal? (interp (IfC (AppC (IdC 'equals?) (list (NumC 3) (NumC 4)))
+(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (NumC 3) (NumC 4)))
                            (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 1))
 (check-exn #rx"ZODE: Expected a condition" (lambda () (interp (IfC (NumC 4) (AppC (IdC '+)
                                                   (list (NumC 1) (NumC 2))) (NumC 1)) top-env)))
-(check-exn #rx"ZODE: No parameter" (lambda () (interp (IfC (AppC (IdC 'equals?) (list (NumC 3)
+(check-exn #rx"ZODE: No parameter" (lambda () (interp (IfC (AppC (IdC 'equal?) (list (NumC 3)
                                      (NumC 3))) (AppC (IdC 'z) (list (NumC 1) (NumC 2))) (NumC 1)) top-env)))
 
 ;top interp tests
 (check-equal? (top-interp '{locals : x = 12 : {+ x 1}}) "13")
 (check-equal? (top-interp '{locals : x = false : x}) "false")
 (check-equal? (top-interp '{locals : x = true : x}) "true")
-(check-equal? (top-interp '{if : {equals? "mystring" "mystring"} :
+(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} :
                                {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
-(check-equal? (top-interp '{if : {equals? "mystring" "mystring"} : + : {lamb : y : {- y 34}}}) "#<primop>")
-(check-equal? (top-interp '{if : {equals? "mystring" "mystring"} : "mystring" : {lamb : y : {- y 34}}}) "mystring")
-(check-exn #rx"user-error: this" (lambda () (top-interp '{if : {equals? "mystring" "mystring"} :
+(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : + : {lamb : y : {- y 34}}}) "#<primop>")
+(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : "mystring" : {lamb : y : {- y 34}}}) "\"mystring\"")
+(check-exn #rx"user-error: \"this" (lambda () (top-interp '{if : {equal? "mystring" "mystring"} :
                                                              {error "this didnt work"} : {lamb : y : {- y 34}}})))
 (check-exn #rx"user-error" (lambda () (top-interp '((lamb : e : (e e)) error))))
 (check-equal? (top-interp '{locals : add1 = {lamb : x : {+ x 1}} : y = {+ 3 4} : {add1 y}}) "8")
 
-(check-equal? (top-interp '{if : {equals? {lamb : x : {+ x 34}} {lamb : x : {+ x 34}}} :
+(check-equal? (top-interp '{if : {equal? {lamb : x : {+ x 34}} {lamb : x : {+ x 34}}} :
                                {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
-(check-equal? (top-interp '{if : {equals? + +} :
+(check-equal? (top-interp '{if : {equal? + +} :
+                               {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
+(check-equal? (top-interp '{if : {equal? + "string"} :
                                {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
 
 ;while evaluating (top-interp (quote ((lamb : empty : ((lamb : cons : ((lamb : empty? :
 ;((lamb : first : ((lamb : rest : ((lamb : Y : ((lamb : length : ((lamb : addup : (addup (cons 3 (cons 17 empty...
 ;Saving submission with errors.
+
+
+(check-equal?
+ (top-interp '{locals : Y = {lamb : f : {{lamb : x : {x x}}
+                                         {lamb : x : {f {lamb : a : {{x x} a}}}}}}
+                      : empty = "mt"
+                      : empty? = {lamb : lst : {equal? lst "mt"}}
+                      : cons = {lamb : fst rst : {lamb : sel : {if : sel : fst : rst}}}
+                      : first = {lamb : lst : {lst true}}
+                      : rest = {lamb : lst : {lst false}} :
+                      {locals : sum = {Y {lamb : sum : {lamb : lst : {if : {empty? lst}
+                                                                         : 0
+                                                                         : {+ {first lst} {sum {rest lst}}}}}}}
+                              : {sum {cons 10 {cons 20 {cons 30 {cons 40 empty}}}}}}})
+
+ "100")
 
