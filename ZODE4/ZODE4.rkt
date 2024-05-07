@@ -13,6 +13,33 @@
 (struct LambC ([id : (Listof Symbol)] [exp : ExprC]) #:transparent)
 (struct AppC ([fun : ExprC] [args : (Listof ExprC)]) #:transparent)
 
+#|Values|#
+(define-type Value (U BoolV NumV StrV PrimV CloV))
+(struct NumV ([n : Real]) #:transparent)
+(struct StrV ([s : String]) #:transparent)
+(struct BoolV ([b : Boolean]) #:transparent)
+(struct PrimV ([p : Symbol]) #:transparent)
+(struct CloV ([args : (Listof Symbol)] [body : ExprC] [env : Environment]) #:transparent)
+
+(struct Binding ([name : Symbol] [val : Value]) #:transparent)
+
+
+(define-type Environment (Listof Binding))
+
+
+;;Top Level Environment
+(define top-env : Environment (list
+                 (Binding 'true (BoolV #t))
+                 (Binding 'false (BoolV #f))
+                 (Binding '+ (PrimV '+))
+                 (Binding '- (PrimV '-))
+                 (Binding '* (PrimV '*))
+                 (Binding '/ (PrimV '/))
+                 (Binding '<= (PrimV '<=))
+                 (Binding 'equals? (PrimV 'equals?))))
+
+
+
 #|
 Parses an expression
 Input: Sexp, Output: ExprC
@@ -31,7 +58,8 @@ Input: Sexp, Output: ExprC
     [(? real? n) (NumC n)]
     [(? string? s) (StrC s)]
     [(list 'if ': cond ': then ': else) (IfC (parse cond) (parse then) (parse else))]
-    [(list 'locals ': cls ... ': exp) (let ([clauses (parse-clauses (cast cls (Listof Sexp)))])(AppC (LambC (first clauses) (parse exp)) (second clauses)))]
+    [(list 'locals ': cls ... ': exp) (let ([clauses (parse-clauses (cast cls (Listof Sexp)))])
+                                        (AppC (LambC (first clauses) (parse exp)) (second clauses)))]
     [(list 'lamb ': id ... ': exp) (LambC (parse-ids (cast id (Listof Symbol))) (parse exp))]
     [(list fun args ...) (AppC (parse fun) (map parse args))]
     [(? symbol? i)
@@ -43,30 +71,19 @@ Input: Sexp, Output: ExprC
 (define (parse-ids [lst : (Listof Symbol)]) : (Listof Symbol)
   (cond 
     [(empty? lst) '()]
-    [(symbol? (first lst)) (cond
+    [else (cond
                      [(not-valid-identifier? (first lst)) (error "ZODE: invalid identifier, got: ~e" (first lst))]
-                     [else (cons (first lst) (parse-ids (rest lst)))])]
-    [else (error "ZODE: Parameter not recognized")]))
+                     [else (cons (first lst) (parse-ids (rest lst)))])]))
 
 
 (define (parse-clauses [exp : Sexp]) : (List (Listof Symbol) (Listof ExprC))
   (match exp
     [(list (? is-valid-identifier? id) '= exp) (list (list id) (list (parse exp)))]
-    [(list (? is-valid-identifier? id) '= exp ': cls ...) (let ([res (parse-clauses cls)]) (list (cons id (first res)) (cons (parse exp) (second res))))]
+    [(list (? is-valid-identifier? id) '= exp ': cls ...) (let ([res (parse-clauses cls)])
+                                          (list (cons id (first res)) (cons (parse exp) (second res))))]
     [other (error 'parse-clauses "ZODE: expected valid expression, got: ~e" other)]))
 
-#|Values|#
-(define-type Value (U BoolV NumV StrV PrimV CloV))
-(struct NumV ([n : Real]) #:transparent)
-(struct StrV ([s : Symbol]) #:transparent)
-(struct BoolV ([b : Boolean]) #:transparent)
-(struct PrimV ([p : Symbol]) #:transparent)
-(struct CloV ([args : (Listof Symbol)] [body : ExprC] [env : Environment]) #:transparent)
 
-(struct Binding ([name : Symbol] [val : Value]) #:transparent)
-
-
-(define-type Environment (Listof Binding))
 
 #|Top-level Env Functions|#
 (define (apply-func [op : Symbol] [args : (Listof Value)]) : Value
@@ -102,9 +119,6 @@ Input: Sexp, Output: ExprC
     [((StrV s1) (StrV s2)) (equal? s1 s2)]
     [((BoolV b1) (BoolV b2)) (equal? b1 b2)]))
 
-(define (user-error [v : Value]) : Nothing
-  (error 'user-error (serialize v)))
-
 
 
 ;;temp
@@ -121,7 +135,7 @@ Input: ZODE4 Value, Output: String
   (match v
     [(NumV n) (~v n)]
     [(BoolV b) (if b "true" "false")]
-    [(StrV s) (~v s)]
+    [(StrV s) s]
     [(CloV _ _ _) "#<procedure>"]
     [(PrimV op) (format "#<primop>")]))
 
@@ -130,22 +144,13 @@ Interpreter
 Input: ExprC Env, Output: Value
 |#
 
-(define top-env : Environment (list
-                 (Binding 'true (BoolV #t))
-                 (Binding 'false (BoolV #f))
-                 (Binding '+ (PrimV '+))
-                 (Binding '- (PrimV '-))
-                 (Binding '* (PrimV '*))
-                 (Binding '/ (PrimV '/))
-                 (Binding '<= (PrimV '<=))
-                 (Binding 'equals? (PrimV 'equals?))))
-
-
 ;;add-env
-(define (add-env [env : Environment] [args : (Listof ExprC)] [params : (Listof Symbol)]) : Environment
+(define (add-env [env : Environment] [args : (Listof ExprC)] [params :
+                                                     (Listof Symbol)]) : Environment
   (cond
     [(empty? args) env]
-    [else (cons (Binding (first params) (interp (first args) env)) (add-env env (rest args) (rest params)))]))
+    [else (cons (Binding (first params) (interp (first args) env))
+                (add-env env (rest args) (rest params)))]))
 
 ;;interp-IdC
 (define (interp-id [s : Symbol] [env : Environment]) : Value
@@ -165,26 +170,35 @@ Input: ExprC Env, Output: Value
 (define (interp [exp : ExprC] [env : Environment]) : Value
   (match exp
     [(NumC n) (NumV n)]
-    [(IfLeqZeroC c i e) (cond
-                          [(<= (NumV-n (let ([num (interp c env)])
-                                         (cond
-                                           [(NumV? num) (cast num NumV)]
-                                           [else (error 'interp "ZODE: Type Mismatch, Expected Real, got ~e" num)]))) 0) (interp i env)]
-                          [else (interp e env)])]
+    [(StrC str) (StrV str)]
+    [(IfC c i e) (let ([condition (interp c env)])
+                             (cond
+                               [(BoolV? condition) (let ([bool (cast condition BoolV)])
+                                                     (cond
+                                                       [(BoolV-b bool) (interp i env)]
+                                                       [else (interp e env)]))]
+                               [else (error 'interp "ZODE: Expected a condition,
+                                                         got ~e instead" c)]))]
     [(AppC expr args) (let ([clo (let ([temp-clo (interp expr env)])
                                     (cond
                                       [(CloV? temp-clo) (cast temp-clo CloV)]
                                       [(PrimV? temp-clo) (cast temp-clo PrimV)]
-                                      [else (error 'interp "ZODE: Expected CloV or PrimV, got ~e" temp-clo)]))])
+                                      [else (error 'interp "ZODE: Expected CloV
+                                                      or PrimV, got ~e" temp-clo)]))])
                      (match clo
                        [(? CloV?)(cond
-                         [(= (length args) (length (CloV-args clo))) (interp (CloV-body clo) (add-env (CloV-env clo) args (CloV-args clo)))]
+                         [(= (length args) (length (CloV-args clo))) (interp
+                                      (CloV-body clo) (add-env (CloV-env clo) args (CloV-args clo)))]
                          [else (error 'interp "ZODE: Number of Argument Mismatch, expected
                                ~e, got ~e" (length (CloV-args clo)) (length args))])]
                        [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env))]))]
     
     [(LambC params expr) (CloV params expr env)]
     [(IdC s) (interp-id s env)]))
+
+;;top-interp
+(define (top-interp [s : Sexp]) : String
+  (serialize (interp (parse s) top-env)))
 
 
 #|TEST CASES|#
@@ -205,6 +219,8 @@ Input: ExprC Env, Output: Value
                                                                                (NumC 1))))
                                                   (list (NumC 12))))
 
+
+
 (check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{if : 3 : 4 : 'locals})))
 (check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{{lamb : x locals : {+ x 1}} 12})))
 (check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse '{})))
@@ -224,21 +240,47 @@ Input: ExprC Env, Output: Value
 (check-exn #rx"ZODE: Invalid arguments for operation" (lambda () (apply-op 'j (list (BoolV #t) (NumV 0)))))
 (check-equal? (apply-func 'equals? (list (NumV 5) (NumV 6))) (BoolV #f))
 (check-equal? (apply-func 'equals? (list (NumV 6) (NumV 6))) (BoolV #t))
-(check-equal? (apply-func 'equals? (list (StrV 'hi) (StrV 'hi))) (BoolV #t))
+(check-equal? (apply-func 'equals? (list (StrV "hi") (StrV "hi"))) (BoolV #t))
 (check-equal? (apply-func 'equals? (list (BoolV #t) (BoolV #f))) (BoolV #f))
-(check-exn #rx"ZODE: Wrong amount of args" (lambda () (apply-func 'equals? (list (NumV 5) (NumV 6) (NumV 3)))))
+(check-exn #rx"ZODE: Wrong amount of args" (lambda () (apply-func 'equals? (list (NumV 5)
+                                                                                 (NumV 6) (NumV 3)))))
 
 
 ;interp test cases
-(check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+) (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5))) (NumC 2))) top-env) (NumV 10))
+(check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+)
+                            (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5))) (NumC 2))) top-env) (NumV 10))
 
-(check-exn #rx"ZODE: Expected CloV" (lambda () (interp (AppC (IdC '+) (list (AppC (NumC 4) (list (NumC 3) (NumC 5))) (NumC 2))) top-env)))
-(check-exn #rx"ZODE: Number of Argument" (lambda () (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+) (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5) (NumC 5))) (NumC 2))) top-env)))
+(check-exn #rx"ZODE: Expected CloV" (lambda () (interp (AppC (IdC '+) (list (AppC
+                                             (NumC 4) (list (NumC 3) (NumC 5))) (NumC 2))) top-env)))
+(check-exn #rx"ZODE: Number of Argument" (lambda () (interp (AppC (IdC '+) (list (AppC
+       (LambC (list 'x 'y) (AppC (IdC '+) (list (IdC 'x) (IdC 'y))))
+       (list (NumC 3) (NumC 5) (NumC 5))) (NumC 2))) top-env)))
 
 
 (check-equal? (interp (AppC (IdC '-) (list (NumC 1) (NumC 2))) top-env) (NumV -1))
 (check-equal? (interp (AppC (IdC '*) (list (NumC 1) (NumC 2))) top-env) (NumV 2))
 (check-equal? (interp (AppC (IdC '/) (list (NumC 1) (NumC 2))) top-env) (NumV 1/2))
 (check-equal? (interp (AppC (IdC '+) (list (NumC 1) (NumC 2))) top-env) (NumV 3))
-;(check-equal? (interp (AppC (IdC 'equals?) (list (NumC 3) (AppC (IdC '+) (list (NumC 1) (NumC 2))))) top-env) (BoolV #t))
-(check-equal? (interp (IfLeqZeroC (NumC 2) (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 1))
+(check-equal? (interp (AppC (IdC 'equals?) (list (NumC 3) (AppC (IdC '+) (list
+                                                     (NumC 1) (NumC 2))))) top-env) (BoolV #t))
+(check-equal? (interp (IfC (AppC (IdC 'equals?) (list (NumC 3) (NumC 3))) (AppC (IdC '+)
+                                                (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
+(check-equal? (interp (IfC (AppC (IdC 'equals?) (list (StrC "my string") (StrC "my string")))
+                          (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
+(check-equal? (interp (IfC (AppC (IdC 'equals?) (list (IdC 'false) (IdC 'false)))
+                           (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
+(check-equal? (interp (IfC (AppC (IdC 'equals?) (list (NumC 3) (NumC 4)))
+                           (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 1))
+(check-exn #rx"ZODE: Expected a condition" (lambda () (interp (IfC (NumC 4) (AppC (IdC '+)
+                                                  (list (NumC 1) (NumC 2))) (NumC 1)) top-env)))
+(check-exn #rx"ZODE: No parameter" (lambda () (interp (IfC (AppC (IdC 'equals?) (list (NumC 3)
+                                     (NumC 3))) (AppC (IdC 'z) (list (NumC 1) (NumC 2))) (NumC 1)) top-env)))
+
+;top interp tests
+(check-equal? (top-interp '{locals : x = 12 : {+ x 1}}) "13")
+(check-equal? (top-interp '{locals : x = false : x}) "false")
+(check-equal? (top-interp '{locals : x = true : x}) "true")
+(check-equal? (top-interp '{if : {equals? "mystring" "mystring"} :
+                               {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
+(check-equal? (top-interp '{if : {equals? "mystring" "mystring"} : + : {lamb : y : {- y 34}}}) "#<primop>")
+(check-equal? (top-interp '{if : {equals? "mystring" "mystring"} : "mystring" : {lamb : y : {- y 34}}}) "mystring")
