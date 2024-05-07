@@ -36,7 +36,8 @@
                  (Binding '* (PrimV '*))
                  (Binding '/ (PrimV '/))
                  (Binding '<= (PrimV '<=))
-                 (Binding 'equals? (PrimV 'equals?))))
+                 (Binding 'equals? (PrimV 'equals?))
+                 (Binding 'error (PrimV 'error))))
 
 
 
@@ -122,6 +123,7 @@ Input: Sexp, Output: ExprC
     [(equal? op '*) (apply-op '* args)]
     [(equal? op '/) (apply-op '/ args)]
     [(equal? op '<=) (apply-op '<= args)]
+    [(equal? op 'error) (apply-op 'error args)]
     [(equal? op 'equals?)
      (cond
        [(equal? (length args) 2) (BoolV (equals? (first args) (first (rest args))))]
@@ -140,6 +142,7 @@ Input: Sexp, Output: ExprC
                        (error "ZODE: Division by zero"))]
        [(equal? op '<=) (BoolV (<= a b))]
        [else (error "ZODE: Unknown operator, got: ~e" op)])]
+    [(list (StrV str)) (user-error (first args))]
     [else (error "ZODE: Invalid arguments for operation")]))
 
 (define (equals? [a : Any] [b : Any]) : Boolean
@@ -167,6 +170,9 @@ Input: ZODE4 Value, Output: String
     [(StrV s) s]
     [(CloV _ _ _) "#<procedure>"]
     [(PrimV op) (format "#<primop>")]))
+
+(define (user-error [v : Value]) : Nothing
+  (error 'user-error (serialize v)))
 
 #|
 Interpreter
@@ -319,3 +325,8 @@ Input: ExprC Env, Output: Value
                                {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
 (check-equal? (top-interp '{if : {equals? "mystring" "mystring"} : + : {lamb : y : {- y 34}}}) "#<primop>")
 (check-equal? (top-interp '{if : {equals? "mystring" "mystring"} : "mystring" : {lamb : y : {- y 34}}}) "mystring")
+(check-exn #rx"user-error: this" (lambda () (top-interp '{if : {equals? "mystring" "mystring"} :
+                                                             {error "this didnt work"} : {lamb : y : {- y 34}}})))
+
+;expected exception with message containing user-error on test expression: '(top-interp '((lamb : e : (e e)) error))
+;Saving submission with errors.
