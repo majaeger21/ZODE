@@ -27,7 +27,7 @@
 (define-type Environment (Listof Binding))
 
 
-;;Top Level Environment
+#|Top Level Environment|#
 (define top-env : Environment (list
                  (Binding 'true (BoolV #t))
                  (Binding 'false (BoolV #f))
@@ -39,20 +39,9 @@
                  (Binding 'equals? (PrimV 'equals?))
                  (Binding 'error (PrimV 'error))))
 
-
-
-#|
-Parses an expression
-Input: Sexp, Output: ExprC
+#| Parses an Expression
+   Input: Sexp, Output: ExprC
 |#
-
-(define (not-valid-identifier? id)
-  (member id '(if lamb locals : =)))
-
-(: is-valid-identifier? (-> Any Boolean : #:+ Symbol))
-(define (is-valid-identifier? id)
-  (and (symbol? id)
-       (not (member id '(if lamb locals : =)))))
 
 (define (parse [exp : Sexp]) : ExprC
   (match exp
@@ -71,9 +60,6 @@ Input: Sexp, Output: ExprC
        [(not-valid-identifier? i) (error "ZODE: invalid identifier, got: ~e" i)]
        [else (IdC i)])]
     [other (error 'parse "ZODE: expected valid expression, got: ~e" other)]))
-
-#;'(parse '(locals : z = (lamb : : 3) : z = 9 : (z)))
-"ZODE: duplicate identifier found: ~e"
 
 (define (parse-ids [lst : (Listof Symbol)]) : (Listof Symbol)
   (cond 
@@ -94,13 +80,13 @@ Input: Sexp, Output: ExprC
     [other
      (error 'parse-clauses "ZODE: expected valid expression, got: ~e" other)]))
 
+(define (not-valid-identifier? id)
+  (member id '(if lamb locals : =)))
 
-#;(define (parse-clauses [exp : Sexp]) : (List (Listof Symbol) (Listof ExprC))
-  (match exp
-    [(list (? is-valid-identifier? id) '= exp) (list (list id) (list (parse exp)))]
-    [(list (? is-valid-identifier? id) '= exp ': cls ...) (let ([res (parse-clauses cls)])
-                                          (list (cons id (first res)) (cons (parse exp) (second res))))]
-    [other (error 'parse-clauses "ZODE: expected valid expression, got: ~e" other)]))
+(: is-valid-identifier? (-> Any Boolean : #:+ Symbol))
+(define (is-valid-identifier? id)
+  (and (symbol? id)
+       (not (member id '(if lamb locals : =)))))
 
 (define (contains? [sym : Symbol] [args : (Listof Symbol)]) : Boolean
   (cond
@@ -160,7 +146,6 @@ Input: Sexp, Output: ExprC
 Serialize
 Input: ZODE4 Value, Output: String
 |#
-
 (define (serialize (v : Value)) : String
   (match v
     [(NumV n) (~v n)]
