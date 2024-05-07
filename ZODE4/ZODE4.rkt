@@ -61,10 +61,10 @@ Input: Sexp, Output: ExprC
     [(list 'locals ': cls ... ': exp) (let ([clauses (parse-clauses (cast cls (Listof Sexp)))])
                                         (AppC (LambC (first clauses) (parse exp)) (second clauses)))]
     #;[(list 'lamb ': id ... ': exp) (LambC (parse-ids (cast id (Listof Symbol))) (parse exp))]
-    [(list 'lamb ': args ... ': bod)  
-     (unless (andmap symbol? args)  
-       (error "ZODE: identifier cannot be a number, got: ~e" args))
-     (LambC (parse-ids (cast args (Listof Symbol))) (parse exp))]
+    [(list 'lamb ': id ... ': exp)  
+     (unless (andmap symbol? id)  
+       (error "ZODE: identifier cannot be a number, got: ~e" exp))
+     (LambC (parse-ids (cast id (Listof Symbol))) (parse exp))]
     [(list fun args ...) (AppC (parse fun) (map parse args))]
     [(? symbol? i)
      (cond
