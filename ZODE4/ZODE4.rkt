@@ -5,7 +5,7 @@
 #|Project Status: FULLY IMPLEMENTED|#
 
 #|ZODE4 Data Types|#
-(define-type ExprC (U NumC IdC StrC IfC LambC AppC IfLeqZeroC))
+(define-type ExprC (U NumC IdC StrC IfC LambC AppC))
 (struct NumC ([n : Real]) #:transparent)
 (struct IdC ([s : Symbol]) #:transparent)
 (struct StrC ([s : String]) #:transparent)
@@ -147,14 +147,12 @@ Input: Sexp, Output: ExprC
 
 (define (equals? [a : Any] [b : Any]) : Boolean
   (match* (a b)
-    [((NumV n1) (NumV n2)) (= n1 n2)]
+    [((NumV n1) (NumV n2)) (equal? n1 n2)]
     [((StrV s1) (StrV s2)) (equal? s1 s2)]
-    [((BoolV b1) (BoolV b2)) (equal? b1 b2)]))
-
-
-
-;;temp
-(struct IfLeqZeroC ([cond : ExprC] [then : ExprC] [else : ExprC]) #:transparent)
+    [((BoolV b1) (BoolV b2)) (equal? b1 b2)]
+    [((PrimV s1) (PrimV s2)) (equal? s1 s2)]
+    [((CloV args1 body1 env1) (CloV args2 body2 env2)) (and
+                                        (equal? args1 args2) (equal? body1 body2))]))
 
 
 
@@ -180,11 +178,11 @@ Input: ExprC Env, Output: Value
 |#
 
 ;;add-env
-(define (add-env [env : Environment] [args : (Listof ExprC)] [params :
+(define (add-env [env : Environment] [args : (Listof Value)] [params :
                                                      (Listof Symbol)]) : Environment
   (cond
     [(empty? args) env]
-    [else (cons (Binding (first params) (interp (first args) env))
+    [else (cons (Binding (first params) (first args))
                 (add-env env (rest args) (rest params)))]))
 
 ;;interp-IdC
@@ -223,7 +221,7 @@ Input: ExprC Env, Output: Value
                      (match clo
                        [(? CloV?)(cond
                          [(= (length args) (length (CloV-args clo))) (interp
-                                      (CloV-body clo) (add-env (CloV-env clo) args (CloV-args clo)))]
+                                      (CloV-body clo) (add-env (CloV-env clo) (interp-args args env) (CloV-args clo)))]
                          [else (error 'interp "ZODE: Number of Argument Mismatch, expected
                                ~e, got ~e" (length (CloV-args clo)) (length args))])]
                        [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env))]))]
@@ -328,6 +326,14 @@ Input: ExprC Env, Output: Value
 (check-exn #rx"user-error: this" (lambda () (top-interp '{if : {equals? "mystring" "mystring"} :
                                                              {error "this didnt work"} : {lamb : y : {- y 34}}})))
 (check-exn #rx"user-error" (lambda () (top-interp '((lamb : e : (e e)) error))))
+(check-equal? (top-interp '{locals : add1 = {lamb : x : {+ x 1}} : y = {+ 3 4} : {add1 y}}) "8")
 
-;while evaluating (top-interp (quote ((lamb : empty : ((lamb : cons : ((lamb : empty? : ((lamb : first : ((lamb : rest : ((lamb : Y : ((lamb : length : ((lamb : addup : (addup (cons 3 (cons 17 empty...
+(check-equal? (top-interp '{if : {equals? {lamb : x : {+ x 34}} {lamb : x : {+ x 34}}} :
+                               {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
+(check-equal? (top-interp '{if : {equals? + +} :
+                               {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
+
+;while evaluating (top-interp (quote ((lamb : empty : ((lamb : cons : ((lamb : empty? :
+;((lamb : first : ((lamb : rest : ((lamb : Y : ((lamb : length : ((lamb : addup : (addup (cons 3 (cons 17 empty...
 ;Saving submission with errors.
+
