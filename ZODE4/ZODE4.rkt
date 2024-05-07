@@ -142,7 +142,7 @@ Input: Sexp, Output: ExprC
                        (error "ZODE: Division by zero"))]
        [(equal? op '<=) (BoolV (<= a b))]
        [else (error "ZODE: Unknown operator, got: ~e" op)])]
-    [(list (StrV str)) (user-error (first args))]
+    [(list Value) (user-error (first args))]
     [else (error "ZODE: Invalid arguments for operation")]))
 
 (define (equals? [a : Any] [b : Any]) : Boolean
@@ -327,6 +327,7 @@ Input: ExprC Env, Output: Value
 (check-equal? (top-interp '{if : {equals? "mystring" "mystring"} : "mystring" : {lamb : y : {- y 34}}}) "mystring")
 (check-exn #rx"user-error: this" (lambda () (top-interp '{if : {equals? "mystring" "mystring"} :
                                                              {error "this didnt work"} : {lamb : y : {- y 34}}})))
+(check-exn #rx"user-error" (lambda () (top-interp '((lamb : e : (e e)) error))))
 
-;expected exception with message containing user-error on test expression: '(top-interp '((lamb : e : (e e)) error))
+;while evaluating (top-interp (quote ((lamb : empty : ((lamb : cons : ((lamb : empty? : ((lamb : first : ((lamb : rest : ((lamb : Y : ((lamb : length : ((lamb : addup : (addup (cons 3 (cons 17 empty...
 ;Saving submission with errors.
