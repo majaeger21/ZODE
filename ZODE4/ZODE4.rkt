@@ -60,7 +60,11 @@ Input: Sexp, Output: ExprC
     [(list 'if ': cond ': then ': else) (IfC (parse cond) (parse then) (parse else))]
     [(list 'locals ': cls ... ': exp) (let ([clauses (parse-clauses (cast cls (Listof Sexp)))])
                                         (AppC (LambC (first clauses) (parse exp)) (second clauses)))]
-    [(list 'lamb ': id ... ': exp) (LambC (parse-ids (cast id (Listof Symbol))) (parse exp))]
+    #;[(list 'lamb ': id ... ': exp) (LambC (parse-ids (cast id (Listof Symbol))) (parse exp))]
+    [(list 'lamb ': args ... ': bod)  
+     (unless (andmap symbol? args)  
+       (error "ZODE: identifier cannot be a number, got: ~e" args))
+     (LambC (parse-ids (cast args (Listof Symbol))) (parse exp))]
     [(list fun args ...) (AppC (parse fun) (map parse args))]
     [(? symbol? i)
      (cond
@@ -68,13 +72,14 @@ Input: Sexp, Output: ExprC
        [else (IdC i)])]
     [other (error 'parse "ZODE: expected valid expression, got: ~e" other)]))
 
+
 (define (parse-ids [lst : (Listof Symbol)]) : (Listof Symbol)
   (cond 
     [(empty? lst) '()]
     [else (cond
-                     [(not-valid-identifier? (first lst)) (error "ZODE: invalid identifier, got: ~e" (first lst))]
-                     [else (cons (first lst) (parse-ids (rest lst)))])]))
-
+            [(not-valid-identifier? (first lst)) (error "ZODE: invalid identifier, got: ~e" (first lst))]
+            [(not (unique-args? lst)) (error "ZODE: duplicate identifier found: ~e" lst)]
+            [else (cons (first lst) (parse-ids (rest lst)))])]))
 
 (define (parse-clauses [exp : Sexp]) : (List (Listof Symbol) (Listof ExprC))
   (match exp
@@ -83,6 +88,17 @@ Input: Sexp, Output: ExprC
                                           (list (cons id (first res)) (cons (parse exp) (second res))))]
     [other (error 'parse-clauses "ZODE: expected valid expression, got: ~e" other)]))
 
+(define (contains? [sym : Symbol] [args : (Listof Symbol)]) : Boolean
+  (cond
+    [(empty? args) #f]
+    [(equal? sym (first args)) #t]
+    [else (contains? sym (rest args))]))
+
+(define (unique-args? [args : (Listof Symbol)]) : Boolean
+  (cond
+    [(empty? args) #t]
+    [(contains? (first args) (rest args)) #f]
+    [else (unique-args? (rest args))]))
 
 
 #|Top-level Env Functions|#
@@ -206,6 +222,8 @@ Input: ExprC Env, Output: Value
 (check-equal? (parse 5) (NumC 5))
 (check-equal? (parse 'g) (IdC 'g))
 (check-equal? (parse 'x) (IdC 'x))
+(check-exn #rx"ZODE: duplicate identifier found: " (lambda () (parse '{lamb : x x : 3})))
+(check-exn #rx"ZODE: identifier cannot be a number, got: " (lambda () (parse '{lamb : 3 5 4 : 6})))
 (check-equal? (parse "hello") (StrC "hello"))
 (check-equal? (parse '{if : 3 : 4 : 5}) (IfC (NumC 3) (NumC 4) (NumC 5)))
 (check-equal? (parse-clauses '{x = 12}) (list (list 'x) (list (NumC 12))))
@@ -214,6 +232,10 @@ Input: ExprC Env, Output: Value
                                                                                 (list (IdC 'x)
                                                                                       (NumC 1))))
                                                          (list (NumC 12))))
+(check-equal? (parse '{{lamb : x y : {+ x y}} 12 12}) (AppC (LambC (list 'x 'y) (AppC (IdC '+)
+                                                                         (list (IdC 'x)
+                                                                               (IdC 'y))))
+                                                  (list (NumC 12) (NumC 12))))
 (check-equal? (parse '{{lamb : x : {+ x 1}} 12}) (AppC (LambC (list 'x) (AppC (IdC '+)
                                                                          (list (IdC 'x)
                                                                                (NumC 1))))
@@ -222,7 +244,7 @@ Input: ExprC Env, Output: Value
 
 
 (check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{if : 3 : 4 : 'locals})))
-(check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{{lamb : x locals : {+ x 1}} 12})))
+(check-exn #rx"ZODE: invalid identifier" (lambda () (parse '{{lamb : x locals : {+ x 1}} 12})))
 (check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse '{})))
 (check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse-clauses '{})))
 
