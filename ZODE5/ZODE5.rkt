@@ -154,10 +154,21 @@
 
 
 (define (apply-read-num) : Real
-  3)
+  (printf ">")
+  (let ([num (read)])
+    (cond
+      [(real? num) (cast num Real)]
+      [else (error 'read-num "ZODE: Expected a Number")])))
 
-(define (apply-read-str) : Real
-  9)
+;(check-equal? (apply-read-num) 4)
+(check-exn #rx"ZODE: Expected a Number" (lambda () (apply-read-num)))
+
+(define (apply-read-str) : String
+  (printf ">")
+  (let ([str (read-line)])
+    (cast str String)))
+
+(check-equal? (apply-read-str) "hello world")
 
 (define (apply-seq [args : (Listof Any)]) : Any
   9)
