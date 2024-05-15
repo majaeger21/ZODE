@@ -114,12 +114,20 @@
     [(equal? op '/) (apply-op '/ args)]
     [(equal? op '<=) (apply-op '<= args)]
     [(equal? op 'error) (apply-op 'error args)]
+    [(equal? op 'seq) (apply-seq args)]
+    [(equal? op 'read-num) (NumV (apply-read-num))]
+    [(equal? op 'read-str) (StrV (apply-read-str))]
+    [(equal? op 'println)
+     (cond
+       [(equal? (length args) 1) (BoolV (apply-println (first args)))]
+       [else (error 'apply-func "ZODE: Expected 1 String, got more args")])]
     [(equal? op 'equal?)
      (cond
        [(equal? (length args) 2) (BoolV (equals? (first args) (first (rest args))))]
        [else (error "ZODE: Wrong amount of args")])]
-    [else (error "ZODE: Unknown operator, got: ~e" op)]))
+    [else (error 'apply-func "ZODE: Unknown operator, got: ~e" op)]))
 
+;applies the given operator
 (define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
   (match args
     [(list (NumV a) (NumV b))
@@ -135,6 +143,7 @@
     [(list Value) (user-error (first args))]
     [else (error "ZODE: Invalid arguments for operation")]))
 
+;;handles equals?
 (define (equals? [a : Any] [b : Any]) : Boolean
   (match* (a b)
     [((NumV n1) (NumV n2)) (equal? n1 n2)]
@@ -144,34 +153,47 @@
     [((CloV args1 body1 env1) (CloV args2 body2 env2)) #f]
     [(_ _) #f]))
 
+;;Takes in a string and prints it to stdout
 (define (apply-println [s : Any]) : Boolean
   (cond
-    [(string? s) (begin (printf "~v\n" s) #t)]
+    [(StrV? s) (begin (printf "~v\n" (StrV-s s)) #t)]
     [else (error 'apply-println "ZODE: Expected a string")]))
 
-(check-equal? (apply-println "hello") #t)
+(check-equal? (apply-println (StrV "hello world")) #t)
 (check-exn #rx"ZODE: Expected a string" (lambda () (apply-println '6)))
 
-
+;;Reads a numerical value from stdin
 (define (apply-read-num) : Real
   (printf ">")
-  (let ([num (read)])
-    (cond
-      [(real? num) (cast num Real)]
-      [else (error 'read-num "ZODE: Expected a Number")])))
+  (let ([str-num (read-line)])
+    (match str-num
+      [(? string?) (let ([num (string->number str-num)])
+                     (match num
+                       [(? real?) (cast num Real)]
+                       [Any (error 'read-num "ZODE: Expected a Real Number")]))]
+      [else (error 'read-num "ZODE: Expected a Real Number")])))
 
 ;(check-equal? (apply-read-num) 4)
-(check-exn #rx"ZODE: Expected a Number" (lambda () (apply-read-num)))
+;(check-exn #rx"ZODE: Expected a Real Number" (lambda () (apply-read-num)))
 
+;;Reads a string from stdin
 (define (apply-read-str) : String
   (printf ">")
-  (let ([str (read-line)])
-    (cast str String)))
+  (let ([str (read-line)]) ;use match case instad
+    (cond
+      [(string? str) (cast str String)]
+      [else (error 'read-str "ZODE: Expected a String")])))
 
-(check-equal? (apply-read-str) "hello world")
+;(check-equal? (apply-read-str) "hello world")
 
-(define (apply-seq [args : (Listof Any)]) : Any
-  9)
+;;Takes in a list of values and returns the last value
+(define (apply-seq [args : (Listof Value)]) : Value
+  (cond
+    [(empty? args) (error 'apply-seq "ZODE: No expressions passed to seq, cannot evaluate empty seq")]
+    [(empty? (rest args)) (first args)]
+    [else (apply-seq (rest args))]))
+
+
 
 (define (apply-++ [args : (Listof Any)]) : Any
   9)
@@ -353,6 +375,11 @@ Input: ExprC Env, Output: Value
                                {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
 (check-equal? (top-interp '{if : {equal? + "string"} :
                                {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
+
+(check-equal? (top-interp '{seq {+ 3 4} {println "print this"} {- 4 3}}) "1")
+(check-equal? (top-interp '{locals : x = {read-num} : {+ x 4}}) "8")
+(check-equal? (top-interp '{locals : x = {read-str} : x}) "\"hello world\"")
+(check-exn #rx"ZODE: No expressions" (lambda () (top-interp '{seq})))
 
 (check-equal?
  (top-interp '{locals : Y = {lamb : f : {{lamb : x : {x x}}
