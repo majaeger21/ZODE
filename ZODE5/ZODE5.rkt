@@ -117,6 +117,7 @@
     [(equal? op 'seq) (apply-seq args)]
     [(equal? op 'read-num) (NumV (apply-read-num))]
     [(equal? op 'read-str) (StrV (apply-read-str))]
+    [(equal? op '++) (apply-++ args)]
     [(equal? op 'println)
      (cond
        [(equal? (length args) 1) (BoolV (apply-println (first args)))]
@@ -190,8 +191,13 @@
 ;; Helper function to extract the string from Value
 (define (value->string [v : Value]) : String
   (match v
+    [(NumV n) (number->string n)]
     [(StrV s) s]
-    [else (error 'value->string "ZODE: Unexpected Value type")]))
+    [(BoolV b) (if b "true" "false")]
+    [(PrimV p) (symbol->string p)]
+    ;; For CloV, we can return a placeholder string since it's not straightforward to convert a closure to a string
+    [(CloV args body env) "#<procedure>"]
+    [else (error 'value->string "Unexpected Value type")]))
 
 ;; Main function to concatenate values into a single string
 (define (apply-++ [args : (Listof Value)]) : Value
@@ -334,6 +340,10 @@ Input: ExprC Env, Output: Value
               (StrV "Hello"))
 (check-equal? (apply-++ (list (StrV "123") (StrV "456") (StrV "789"))) 
               (StrV "123456789"))
+(check-equal? (apply-++ (list (NumV 9) (NumV 10)))
+              (StrV "910"))
+(check-equal? (apply-++ (list (NumV 8) (BoolV #t))) (StrV "8true"))
+
 
 ;interp test cases
 (check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+)
@@ -386,6 +396,8 @@ Input: ExprC Env, Output: Value
                                {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
 
 (check-equal? (top-interp '{seq {+ 3 4} {println "print this"} {- 4 3}}) "1")
+(check-equal? (top-interp '{seq {+ 3 4} {println {++ "print this" " and then this"}} {- 4 3}}) "1")
+
 ;(check-equal? (top-interp '{locals : x = {read-num} : {+ x 4}}) "8")
 ;(check-equal? (top-interp '{locals : x = {read-str} : x}) "\"hello world\"")
 (check-exn #rx"ZODE: No expressions" (lambda () (top-interp '{seq})))
