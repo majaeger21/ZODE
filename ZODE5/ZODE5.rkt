@@ -195,7 +195,6 @@
     [(StrV s) s]
     [(BoolV b) (if b "true" "false")]
     [(PrimV p) (symbol->string p)]
-    ;; For CloV, we can return a placeholder string since it's not straightforward to convert a closure to a string
     [(CloV args body env) "#<procedure>"]
     [else (error 'value->string "Unexpected Value type")]))
 
@@ -343,7 +342,8 @@ Input: ExprC Env, Output: Value
 (check-equal? (apply-++ (list (NumV 9) (NumV 10)))
               (StrV "910"))
 (check-equal? (apply-++ (list (NumV 8) (BoolV #t))) (StrV "8true"))
-
+(check-equal? (apply-++ (list (NumV 8) (BoolV #f))) (StrV "8false"))
+(check-equal? (apply-++ (list (PrimV '+) (BoolV #f))) (StrV "+false"))
 
 ;interp test cases
 (check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+)
