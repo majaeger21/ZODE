@@ -265,14 +265,14 @@ Input: ExprC Env, Output: Value
                                     (cond
                                       [(CloV? temp-clo) (cast temp-clo CloV)]
                                       [(PrimV? temp-clo) (cast temp-clo PrimV)]
-                                      [else (error 'interp "ZODE: Expected CloV
-                                                      or PrimV, got ~e" temp-clo)]))])
+                                      [else (begin (printf "~v" expr)(error 'interp "ZODE: Expected CloV
+                                                      or PrimV, got ~e in ~e" temp-clo expr))]))])
                      (match clo
                        [(? CloV?)(cond
                          [(= (length args) (length (CloV-args clo))) (interp
                                       (CloV-body clo) (add-env (CloV-env clo) (interp-args args env) (CloV-args clo)))]
                          [else (error 'interp "ZODE: Number of Argument Mismatch, expected
-                               ~e, got ~e" (length (CloV-args clo)) (length args))])]
+                               ~e - ~e, got ~e - ~e" (length (CloV-args clo)) (CloV-args clo) (length args) args)])]
                        [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env))]))]
     
     [(LambC params expr) (CloV params expr env)]
@@ -416,4 +416,61 @@ Input: ExprC Env, Output: Value
                               : {sum {cons 10 {cons 20 {cons 30 {cons 40 empty}}}}}}})
 
  "100")
+
+;Euclidean Algorithm for GCD
+'({locals :
+          gcd = {lamb : self a b :
+                      {locals : getQ = {lamb : self a b q
+                                             : {if : {<= {* b q} a}
+                                                   : {if : {equal? {* q b} a}
+                                                         : q
+                                                         : {self a b {+ q 1}}}
+                                                   : {- q 1}}}
+                              : getRemainder = {lamb : a b q : {- a {* b q}}}
+                              : {locals
+                                 : q = {getQ getQ a b 1}
+                                 : {if
+                                    : {equal? {getRemainder a b q} 0}
+                                    : b
+                                    : {self self b {getRemainder a b q}}}}}}
+          : {gcd gcd 423 66}})
+
+(check-equal? (top-interp '{locals :
+          gcd = {lamb : self a b :
+                      {locals : getQ = {lamb : self a b q
+                                             : {if : {<= {* b q} a}
+                                                   : {if : {equal? {* q b} a}
+                                                         : q
+                                                         : {self self a b {+ q 1}}}
+                                                   : {- q 1}}}
+                              : getRemainder = {lamb : a b q : {- a {* b q}}}
+                              : {locals
+                                 : q = {getQ getQ a b 1}
+                                 : {if
+                                    : {equal? {getRemainder a b q} 0}
+                                    : b
+                                    : {self self b {getRemainder a b q}}}}}}
+          : {gcd gcd 423 66}}) "3")
+
+(check-equal? (top-interp '{locals :
+          gcd = {lamb : self a b :
+                      {locals : getQ = {lamb : self a b q
+                                             : {if : {<= {* b q} a}
+                                                   : {if : {equal? {* q b} a}
+                                                         : q
+                                                         : {self self a b {+ q 1}}}
+                                                   : {- q 1}}}
+                              : getRemainder = {lamb : a b q : {- a {* b q}}}
+                              : {locals
+                                 : q = {getQ getQ a b 1}
+                                 : {if
+                                    : {equal? {getRemainder a b q} 0}
+                                    : b
+                                    : {self self b {getRemainder a b q}}}}}}
+          : {gcd gcd 144 40}}) "8")
+
+
+
+
+
 
