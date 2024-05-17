@@ -418,56 +418,68 @@ Input: ExprC Env, Output: Value
  "100")
 
 ;Euclidean Algorithm for GCD
-'({locals :
-          gcd = {lamb : self a b :
-                      {locals : getQ = {lamb : self a b q
-                                             : {if : {<= {* b q} a}
-                                                   : {if : {equal? {* q b} a}
-                                                         : q
-                                                         : {self a b {+ q 1}}}
-                                                   : {- q 1}}}
-                              : getRemainder = {lamb : a b q : {- a {* b q}}}
-                              : {locals
-                                 : q = {getQ getQ a b 1}
-                                 : {if
-                                    : {equal? {getRemainder a b q} 0}
-                                    : b
-                                    : {self self b {getRemainder a b q}}}}}}
-          : {gcd gcd 423 66}})
+'{locals
+                            : getA = {lamb : : {read-num}}
+                            : getB = {lamb : : {read-num}}
+                            : gcd = {lamb : self a b :
+                                          {locals : getQ = {lamb : self a b q
+                                                                 : {if : {<= {* b q} a}
+                                                                       : {if : {equal? {* q b} a}
+                                                                             : q
+                                                                             : {self self a b {+ q 1}}}
+                                                                       : {- q 1}}}
+                                                  : getRemainder = {lamb : a b q : {- a {* b q}}}
+                                                  : {locals
+                                                     : q = {getQ getQ a b 1}
+                                                     : {if
+                                                        : {equal? {getRemainder a b q} 0}
+                                                        : b
+                                                        : {self self b {getRemainder a b q}}}}}}
+          : {seq {println "Please enter two numbers: \n"} {locals : myGCD = {gcd gcd {getA} {getB}}
+                                                                  : {seq {println {++ "GCD : " myGCD}} myGCD}}}}
 
-(check-equal? (top-interp '{locals :
-          gcd = {lamb : self a b :
-                      {locals : getQ = {lamb : self a b q
-                                             : {if : {<= {* b q} a}
-                                                   : {if : {equal? {* q b} a}
-                                                         : q
-                                                         : {self self a b {+ q 1}}}
-                                                   : {- q 1}}}
-                              : getRemainder = {lamb : a b q : {- a {* b q}}}
-                              : {locals
-                                 : q = {getQ getQ a b 1}
-                                 : {if
-                                    : {equal? {getRemainder a b q} 0}
-                                    : b
-                                    : {self self b {getRemainder a b q}}}}}}
-          : {gcd gcd 423 66}}) "3")
 
-(check-equal? (top-interp '{locals :
-          gcd = {lamb : self a b :
-                      {locals : getQ = {lamb : self a b q
-                                             : {if : {<= {* b q} a}
-                                                   : {if : {equal? {* q b} a}
-                                                         : q
-                                                         : {self self a b {+ q 1}}}
-                                                   : {- q 1}}}
-                              : getRemainder = {lamb : a b q : {- a {* b q}}}
-                              : {locals
-                                 : q = {getQ getQ a b 1}
-                                 : {if
-                                    : {equal? {getRemainder a b q} 0}
-                                    : b
-                                    : {self self b {getRemainder a b q}}}}}}
-          : {gcd gcd 144 40}}) "8")
+#;(check-equal? (top-interp '{locals
+                            : getA = {lamb : : {read-num}}
+                            : getB = {lamb : : {read-num}}
+                            : gcd = {lamb : self a b :
+                                          {locals : getQ = {lamb : self a b q
+                                                                 : {if : {<= {* b q} a}
+                                                                       : {if : {equal? {* q b} a}
+                                                                             : q
+                                                                             : {self self a b {+ q 1}}}
+                                                                       : {- q 1}}}
+                                                  : getRemainder = {lamb : a b q : {- a {* b q}}}
+                                                  : {locals
+                                                     : q = {getQ getQ a b 1}
+                                                     : {if
+                                                        : {equal? {getRemainder a b q} 0}
+                                                        : b
+                                                        : {self self b {getRemainder a b q}}}}}}
+          : {seq {println "Please enter two numbers:"} {locals : myGCD = {gcd gcd {getA} {getB}}
+                                                                  : {seq {println {++ "GCD : " myGCD}} myGCD}}}}) "3")
+
+#;(top-interp '{locals
+                            : getA = {lamb : : {read-num}}
+                            : getB = {lamb : : {read-num}}
+                            : gcd = {lamb : self a b :
+                                          {locals : getQ = {lamb : self a b q
+                                                                 : {if : {<= {* b q} a}
+                                                                       : {if : {equal? {* q b} a}
+                                                                             : q
+                                                                             : {self self a b {+ q 1}}}
+                                                                       : {- q 1}}}
+                                                  : getRemainder = {lamb : a b q : {- a {* b q}}}
+                                                  : {locals
+                                                     : q = {getQ getQ a b 1}
+                                                     : {if
+                                                        : {equal? {getRemainder a b q} 0}
+                                                        : b
+                                                        : {self self b {getRemainder a b q}}}}}}
+          : {seq {println "Please enter two numbers to calculate their GCD:"} {locals : myGCD = {gcd gcd {getA} {getB}}
+                                                                  : {seq {println {++ "GCD : " myGCD}} myGCD}}}})
+
+
 
 
 
