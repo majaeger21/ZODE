@@ -439,6 +439,13 @@ Input: ExprC Env, Output: Value
                                                                   : {seq {println {++ "GCD : " myGCD}} myGCD}}}}
 
 
+;Results:
+;"Please enter two numbers to calculate their GCD:"
+;>3422
+;>4582
+;"GCD : 58"
+
+
 #;(check-equal? (top-interp '{locals
                             : getA = {lamb : : {read-num}}
                             : getB = {lamb : : {read-num}}
