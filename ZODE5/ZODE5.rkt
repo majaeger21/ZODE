@@ -441,8 +441,8 @@ Input: ExprC Env, Output: Value
 
 ;Results:
 ;"Please enter two numbers to calculate their GCD:"
-;>3422
-;>4582
+;3422
+;4582
 ;"GCD : 58"
 
 
