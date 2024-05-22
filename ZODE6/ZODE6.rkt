@@ -113,7 +113,7 @@
     [else (unique-args? (rest args))]))
 
 
-#|Top-level Env Functions|#
+#| Top-level Env Functions  |#
 (define (apply-func [op : Symbol] [args : (Listof Value)]) : Value
   (cond
     [(equal? op '+) (apply-op '+ args)]
@@ -139,14 +139,25 @@
 ;; creates a fresh array of the given size, with all cells filled with the given value
 
 
-
 ;; creates a fresh array containing the given values
 
 
-;; returns an elemement of an array
+;; returns the contents of given element of the array 
 
 
-;;
+;; sets the given element to be the result of calling function
+
+
+;; evaluates a sequence of expressions, returning the last one
+
+
+;; accepts a string and a start and end position and returns the corresponding substring
+(define (sub-string [str : String] [start : Integer] [end : Integer]) : String
+  (cond
+    [(< start 0) (error 'sub-string "ZODE: Start needs to be 0 or greater")]
+    [(> end (string-length str)) (error 'sub-string "ZODE: End needs to less than/equal to string length")]
+    [else (substring str start end)]))
+
 
 
 ;; applies the given operator
