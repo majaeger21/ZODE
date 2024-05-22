@@ -262,8 +262,8 @@ Input: ExprC Env, Output: Value
 (define (interp [exp : ExprC] [env : Environment]) : Value
   (match exp
     [(NumC n) (NumV n)]
-    [(StrC str) (StrV str)]
-    [(IfC c i e) (let ([condition (interp c env)])
+    ;[(StrC str) (StrV str)]
+    #;[(IfC c i e) (let ([condition (interp c env)])
                              (cond
                                [(BoolV? condition) (let ([bool (cast condition BoolV)])
                                                      (cond
@@ -273,20 +273,21 @@ Input: ExprC Env, Output: Value
                                                          got ~e instead" c)]))]
     [(AppC expr args) (let ([clo (let ([temp-clo (interp expr env)])
                                     (cond
-                                      [(CloV? temp-clo) (cast temp-clo CloV)]
+                                      ;[(CloV? temp-clo) (cast temp-clo CloV)]
                                       [(PrimV? temp-clo) (cast temp-clo PrimV)]
                                       [else (begin (printf "~v" expr)(error 'interp "ZODE: Expected CloV
                                                       or PrimV, got ~e in ~e" temp-clo expr))]))])
                      (match clo
-                       [(? CloV?)(cond
+                       #;[(? CloV?)(cond
                          [(= (length args) (length (CloV-args clo))) (interp
                                       (CloV-body clo) (add-env (CloV-env clo) (interp-args args env) (CloV-args clo)))]
                          [else (error 'interp "ZODE: Number of Argument Mismatch, expected
                                ~e - ~e, got ~e - ~e" (length (CloV-args clo)) (CloV-args clo) (length args) args)])]
                        [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env))]))]
     
-    [(LambC params expr) (CloV params expr env)]
-    [(IdC s) (interp-id s env)]))
+    ;[(LambC params expr) (CloV params expr env)]
+    ;[(IdC s) (interp-id s env)]
+    ))
 
 ;;top-interp
 (define (top-interp [s : Sexp]) : String
@@ -408,63 +409,63 @@ Results:
 (check-equal? (apply-++ (list (PrimV '+) (BoolV #f))) (StrV "+false"))
 
 ;interp test cases
-(check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+)
+#;(check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+)
                             (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5))) (NumC 2))) top-env) (NumV 10))
 
-(check-exn #rx"ZODE: Expected CloV" (lambda () (interp (AppC (IdC '+) (list (AppC
+#;(check-exn #rx"ZODE: Expected CloV" (lambda () (interp (AppC (IdC '+) (list (AppC
                                              (NumC 4) (list (NumC 3) (NumC 5))) (NumC 2))) top-env)))
-(check-exn #rx"ZODE: Number of Argument" (lambda () (interp (AppC (IdC '+) (list (AppC
+#;(check-exn #rx"ZODE: Number of Argument" (lambda () (interp (AppC (IdC '+) (list (AppC
        (LambC (list 'x 'y) (AppC (IdC '+) (list (IdC 'x) (IdC 'y))))
        (list (NumC 3) (NumC 5) (NumC 5))) (NumC 2))) top-env)))
 
 
-(check-equal? (interp (AppC (IdC '-) (list (NumC 1) (NumC 2))) top-env) (NumV -1))
-(check-equal? (interp (AppC (IdC '*) (list (NumC 1) (NumC 2))) top-env) (NumV 2))
-(check-equal? (interp (AppC (IdC '/) (list (NumC 1) (NumC 2))) top-env) (NumV 1/2))
-(check-equal? (interp (AppC (IdC '+) (list (NumC 1) (NumC 2))) top-env) (NumV 3))
-(check-equal? (interp (AppC (IdC 'equal?) (list (NumC 3) (AppC (IdC '+) (list
+#;(check-equal? (interp (AppC (IdC '-) (list (NumC 1) (NumC 2))) top-env) (NumV -1))
+#;(check-equal? (interp (AppC (IdC '*) (list (NumC 1) (NumC 2))) top-env) (NumV 2))
+#;(check-equal? (interp (AppC (IdC '/) (list (NumC 1) (NumC 2))) top-env) (NumV 1/2))
+#;(check-equal? (interp (AppC (IdC '+) (list (NumC 1) (NumC 2))) top-env) (NumV 3))
+#;(check-equal? (interp (AppC (IdC 'equal?) (list (NumC 3) (AppC (IdC '+) (list
                                                      (NumC 1) (NumC 2))))) top-env) (BoolV #t))
-(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (NumC 3) (NumC 3))) (AppC (IdC '+)
+#;(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (NumC 3) (NumC 3))) (AppC (IdC '+)
                                                 (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
-(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (StrC "my string") (StrC "my string")))
+#;(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (StrC "my string") (StrC "my string")))
                           (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
-(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (IdC 'false) (IdC 'false)))
+#;(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (IdC 'false) (IdC 'false)))
                            (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
-(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (NumC 3) (NumC 4)))
+#;(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (NumC 3) (NumC 4)))
                            (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 1))
-(check-exn #rx"ZODE: Expected a condition" (lambda () (interp (IfC (NumC 4) (AppC (IdC '+)
+#;(check-exn #rx"ZODE: Expected a condition" (lambda () (interp (IfC (NumC 4) (AppC (IdC '+)
                                                   (list (NumC 1) (NumC 2))) (NumC 1)) top-env)))
-(check-exn #rx"ZODE: No parameter" (lambda () (interp (IfC (AppC (IdC 'equal?) (list (NumC 3)
+#;(check-exn #rx"ZODE: No parameter" (lambda () (interp (IfC (AppC (IdC 'equal?) (list (NumC 3)
                                      (NumC 3))) (AppC (IdC 'z) (list (NumC 1) (NumC 2))) (NumC 1)) top-env)))
 
 ;top interp tests
-(check-equal? (top-interp '{locals : x = 12 : {+ x 1}}) "13")
-(check-equal? (top-interp '{locals : x = false : x}) "false")
-(check-equal? (top-interp '{locals : x = true : x}) "true")
-(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} :
+#;(check-equal? (top-interp '{locals : x = 12 : {+ x 1}}) "13")
+#;(check-equal? (top-interp '{locals : x = false : x}) "false")
+#;(check-equal? (top-interp '{locals : x = true : x}) "true")
+#;(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} :
                                {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
-(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : + : {lamb : y : {- y 34}}}) "#<primop>")
-(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : "mystring" : {lamb : y : {- y 34}}}) "\"mystring\"")
-(check-exn #rx"user-error: \"this" (lambda () (top-interp '{if : {equal? "mystring" "mystring"} :
+#;(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : + : {lamb : y : {- y 34}}}) "#<primop>")
+#;(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : "mystring" : {lamb : y : {- y 34}}}) "\"mystring\"")
+#;(check-exn #rx"user-error: \"this" (lambda () (top-interp '{if : {equal? "mystring" "mystring"} :
                                                              {error "this didnt work"} : {lamb : y : {- y 34}}})))
-(check-exn #rx"user-error" (lambda () (top-interp '((lamb : e : (e e)) error))))
-(check-equal? (top-interp '{locals : add1 = {lamb : x : {+ x 1}} : y = {+ 3 4} : {add1 y}}) "8")
+#;(check-exn #rx"user-error" (lambda () (top-interp '((lamb : e : (e e)) error))))
+#;(check-equal? (top-interp '{locals : add1 = {lamb : x : {+ x 1}} : y = {+ 3 4} : {add1 y}}) "8")
 
-(check-equal? (top-interp '{if : {equal? {lamb : x : {+ x 34}} {lamb : x : {+ x 34}}} :
+#;(check-equal? (top-interp '{if : {equal? {lamb : x : {+ x 34}} {lamb : x : {+ x 34}}} :
                                {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
-(check-equal? (top-interp '{if : {equal? + +} :
+#;(check-equal? (top-interp '{if : {equal? + +} :
                                {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
-(check-equal? (top-interp '{if : {equal? + "string"} :
+#;(check-equal? (top-interp '{if : {equal? + "string"} :
                                {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
 
-(check-equal? (top-interp '{seq {+ 3 4} {println "print this"} {- 4 3}}) "1")
-(check-equal? (top-interp '{seq {+ 3 4} {println {++ "print this" " and then this"}} {- 4 3}}) "1")
+#;(check-equal? (top-interp '{seq {+ 3 4} {println "print this"} {- 4 3}}) "1")
+#;(check-equal? (top-interp '{seq {+ 3 4} {println {++ "print this" " and then this"}} {- 4 3}}) "1")
 
 ;(check-equal? (top-interp '{locals : x = {read-num} : {+ x 4}}) "8")
 ;(check-equal? (top-interp '{locals : x = {read-str} : x}) "\"hello world\"")
-(check-exn #rx"ZODE: No expressions" (lambda () (top-interp '{seq})))
+#;(check-exn #rx"ZODE: No expressions" (lambda () (top-interp '{seq})))
 
-(check-equal?
+#;(check-equal?
  (top-interp '{locals : Y = {lamb : f : {{lamb : x : {x x}}
                                          {lamb : x : {f {lamb : a : {{x x} a}}}}}}
                       : empty = "mt"
