@@ -14,11 +14,12 @@
 (struct AppC ([fun : ExprC] [args : (Listof ExprC)]) #:transparent)
 
 #|Values|#
-(define-type Value (U BoolV NumV StrV PrimV CloV))
+(define-type Value (U BoolV NumV StrV PrimV CloV NullV))
 (struct NumV ([n : Real]) #:transparent)
 (struct StrV ([s : String]) #:transparent)
 (struct BoolV ([b : Boolean]) #:transparent)
 (struct PrimV ([p : Symbol]) #:transparent)
+(struct NullV ([nu : Symbol]) #:transparent)
 (struct CloV ([args : (Listof Symbol)] [body : ExprC] [env : Environment]) #:transparent)
 
 (struct Binding ([name : Symbol] [val : Value]) #:transparent)
@@ -30,6 +31,7 @@
 (define top-env : Environment (list
                  (Binding 'true (BoolV #t))
                  (Binding 'false (BoolV #f))
+                 (Binding 'null (NullV 'null))
                  (Binding '+ (PrimV '+))
                  (Binding '- (PrimV '-))
                  (Binding '* (PrimV '*))
@@ -42,7 +44,6 @@
                  (Binding 'read-str (PrimV 'read-str))
                  (Binding 'seq (PrimV 'seq))
                  (Binding '++ (PrimV '++))))
-
 
 #|
    Parses an Expression
@@ -138,6 +139,16 @@
 ;; creates a fresh array of the given size, with all cells filled with the given value
 
 
+
+;; creates a fresh array containing the given values
+
+
+;; returns an elemement of an array
+
+
+;;
+
+
 ;; applies the given operator
 (define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
   (match args
@@ -224,6 +235,7 @@ Input: ZODE4 Value, Output: String
   (match v
     [(NumV n) (~v n)]
     [(BoolV b) (if b "true" "false")]
+    [(NullV nu) "null"]
     [(StrV s) (~v s)]
     [(CloV _ _ _) "#<procedure>"]
     [(PrimV op) (format "#<primop>")]))
