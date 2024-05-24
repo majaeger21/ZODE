@@ -22,28 +22,45 @@
 (struct NullV ([nu : Symbol]) #:transparent)
 (struct CloV ([args : (Listof Symbol)] [body : ExprC] [env : Environment]) #:transparent)
 
-(struct Binding ([name : Symbol] [val : Value]) #:transparent)
+(struct Binding ([name : Symbol] [loc : Integer]) #:transparent)
 
 (define-type Environment (Listof Binding))
 
 
 #|Top Level Environment|#
 (define top-env : Environment (list
-                 (Binding 'true (BoolV #t))
-                 (Binding 'false (BoolV #f))
-                 (Binding 'null (NullV 'null))
-                 (Binding '+ (PrimV '+))
-                 (Binding '- (PrimV '-))
-                 (Binding '* (PrimV '*))
-                 (Binding '/ (PrimV '/))
-                 (Binding '<= (PrimV '<=))
-                 (Binding 'equal? (PrimV 'equal?))
-                 (Binding 'error (PrimV 'error))
-                 (Binding 'println (PrimV 'println))
-                 (Binding 'read-num (PrimV 'read-num))
-                 (Binding 'read-str (PrimV 'read-str))
-                 (Binding 'seq (PrimV 'seq))
-                 (Binding '++ (PrimV '++))))
+                 (Binding 'true 0)
+                 (Binding 'false 1)
+                 (Binding 'null 2)
+                 (Binding '+ 3)
+                 (Binding '- 4)
+                 (Binding '* 5)
+                 (Binding '/ 6)
+                 (Binding '<= 7)
+                 (Binding 'equal? 8)
+                 (Binding 'error 9)
+                 (Binding 'println 10)
+                 (Binding 'read-num 11)
+                 (Binding 'read-str 12)
+                 (Binding 'seq 13)
+                 (Binding '++ 14)))
+
+(define top-store : (Mutable-Vectorof Value)(vector
+                     (BoolV #t)
+                     (BoolV #f)
+                     (NullV 'null)
+                     (PrimV '+)
+                     (PrimV '-)
+                     (PrimV '*)
+                     (PrimV '/)
+                     (PrimV '<=)
+                     (PrimV 'equal?)
+                     (PrimV 'error)
+                     (PrimV 'println)
+                     (PrimV 'read-num)
+                     (PrimV 'read-str)
+                     (PrimV 'seq)
+                     (PrimV '++)))
 
 #|
    Parses an Expression
@@ -256,22 +273,26 @@ Input: ExprC Env, Output: Value
     [else (cons (Binding (first params) (first args))
                 (add-env env (rest args) (rest params)))]))
 
+;;add-store
+(define (add-store [env : Environment] [args : (Listof)]))
+
+
 ;;interp-IdC
-(define (interp-id [s : Symbol] [env : Environment]) : Value
+(define (interp-id [s : Symbol] [env : Environment] [store : (Mutable-Vectorof Value)]) : Value
   (cond
     [(empty? env) (error 'interp-id "ZODE: No parameter matching id: ~e" s)]
-    [(equal? s (Binding-name (first env))) (Binding-val (first env))]
-    [else (interp-id s (rest env))]))
+    [(equal? s (Binding-name (first env))) (vector-ref store (Binding-loc (first env)))]
+    [else (interp-id s (rest env) store)]))
 
 ;;interp-args
-(define (interp-args [args : (Listof ExprC)] [env : Environment]) : (Listof Value)
+(define (interp-args [args : (Listof ExprC)] [env : Environment] [store : (Mutable-Vectorof Value)]) : (Listof Value)
   (cond
     [(empty? args) '()]
-    [else (cons (interp (first args) env)(interp-args (rest args) env))]))
+    [else (cons (interp (first args) env store)(interp-args (rest args) env store))]))
 
 ;interp
 ;;accepts an ExprC and a list of function definitions and returns a Real number (the value)
-(define (interp [exp : ExprC] [env : Environment]) : Value
+(define (interp [exp : ExprC] [env : Environment] [store : (Mutable-Vectorof Value)]) : Value
   (match exp
     [(NumC n) (NumV n)]
     ;[(StrC str) (StrV str)]
@@ -283,7 +304,7 @@ Input: ExprC Env, Output: Value
                                                        [else (interp e env)]))]
                                [else (error 'interp "ZODE: Expected a condition,
                                                          got ~e instead" c)]))]
-    [(AppC expr args) (let ([clo (let ([temp-clo (interp expr env)])
+    [(AppC expr args) (let ([clo (let ([temp-clo (interp expr env store)])
                                     (cond
                                       ;[(CloV? temp-clo) (cast temp-clo CloV)]
                                       [(PrimV? temp-clo) (cast temp-clo PrimV)]
@@ -295,15 +316,15 @@ Input: ExprC Env, Output: Value
                                       (CloV-body clo) (add-env (CloV-env clo) (interp-args args env) (CloV-args clo)))]
                          [else (error 'interp "ZODE: Number of Argument Mismatch, expected
                                ~e - ~e, got ~e - ~e" (length (CloV-args clo)) (CloV-args clo) (length args) args)])]
-                       [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env))]))]
+                       [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env store))]))]
     
     ;[(LambC params expr) (CloV params expr env)]
-    ;[(IdC s) (interp-id s env)]
+    [(IdC s) (interp-id s env store)]
     ))
 
 ;;top-interp
-(define (top-interp [s : Sexp]) : String
-  (serialize (interp (parse s) top-env)))
+(define (top-interp [s : Sexp] [memsize : Integer]) : String
+  (serialize (interp (parse s) top-env (cast (make-vector memsize) (Mutable-Vectorof Value)))))
 
 
 ;; PROGRAM: Euclidean Algorithm for GCD
