@@ -29,23 +29,24 @@
 
 #|Top Level Environment|#
 (define top-env : Environment (list
-                 (Binding 'true 0)
-                 (Binding 'false 1)
-                 (Binding 'null 2)
-                 (Binding '+ 3)
-                 (Binding '- 4)
-                 (Binding '* 5)
-                 (Binding '/ 6)
-                 (Binding '<= 7)
-                 (Binding 'equal? 8)
-                 (Binding 'error 9)
-                 (Binding 'println 10)
-                 (Binding 'read-num 11)
-                 (Binding 'read-str 12)
-                 (Binding 'seq 13)
-                 (Binding '++ 14)))
+                 (Binding 'true 1)
+                 (Binding 'false 2)
+                 (Binding 'null 3)
+                 (Binding '+ 4)
+                 (Binding '- 5)
+                 (Binding '* 6)
+                 (Binding '/ 7)
+                 (Binding '<= 8)
+                 (Binding 'equal? 9)
+                 (Binding 'error 10)
+                 (Binding 'println 11)
+                 (Binding 'read-num 12)
+                 (Binding 'read-str 13)
+                 (Binding 'seq 14)
+                 (Binding '++ 15)))
 
 (define top-store : (Mutable-Vectorof Value)(vector
+                     (NumV 16)
                      (BoolV #t)
                      (BoolV #f)
                      (NullV 'null)
@@ -276,16 +277,50 @@ Interpreter
 Input: ExprC Env, Output: Value
 |#
 
+(define (create-store [size : Integer])
+  (cond
+    [(< size 16) (error 'create-store "ZODE: Allocated Memory Insufficient")]
+    [else (vector-append top-store (cast (make-vector (- size 16) (BoolV #f)) (Mutable-Vectorof Value)))]))
+
+
+
 ;;add-env
 (define (add-env [env : Environment] [args : (Listof Value)] [params :
-                                                     (Listof Symbol)]) : Environment
+                                                     (Listof Symbol)] [store : (Vectorof Value)]) : Environment
   (cond
     [(empty? args) env]
-    [else (cons (Binding (first params) (first args))
-                (add-env env (rest args) (rest params)))]))
+    [else (cons (let ([index (add-store (first args) store)]) (Binding (first params) index))
+                (add-env env (rest args) (rest params) store))]))
 
 ;;add-store
-(define (add-store [env : Environment] [args : (Listof)]))
+(define (add-store [v : Value] [store : (Vectorof Value)]) : Integer
+  
+  (let ([index (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)])
+    (begin (vector-set! store index v)
+           (println "This ran")
+           
+           (vector-set! store 0 (NumV (+ index 1)))
+           (println (~v (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)))
+           index)))
+
+
+(check-equal? (add-store (StrV "String") (create-store 35)) 16)
+(check-equal? (add-store (StrV "Different String") (create-store 35)) 16)
+
+(check-equal? (let ([myStore (create-store 35)]) (let ([index (begin
+                                                                (add-store (NumV 13) myStore)
+                                                                (add-store (StrV "String") myStore))])
+                                                   (vector-ref myStore index))) (StrV "String"))
+
+(check-equal? (let ([myStore (create-store 35)]) (let ([index (begin
+                                                                (add-store (NumV 13) myStore)
+                                                                (add-store (StrV "String") myStore))])
+                                                   (vector-ref myStore (- index 1)))) (NumV 13))
+(check-equal? (let ([myStore (create-store 35)]) (let ([index (begin
+                                                                (add-store (NumV 13) myStore)
+                                                                (add-store (StrV "String") myStore))])
+                                                   (vector-ref myStore (- (cast (NumV-n (cast (vector-ref myStore 0) NumV)) Integer) 1)))) (StrV "String"))
+
 
 
 ;;interp-IdC
@@ -454,7 +489,7 @@ Results:
 
 ;interp test cases
 #;(check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+)
-                            (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5))) (NumC 2))) top-env) (NumV 10))
+                            (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5))) (NumC 2))) top-env (create-store 35)) (NumV 10) )
 
 #;(check-exn #rx"ZODE: Expected CloV" (lambda () (interp (AppC (IdC '+) (list (AppC
                                              (NumC 4) (list (NumC 3) (NumC 5))) (NumC 2))) top-env)))
@@ -463,10 +498,11 @@ Results:
        (list (NumC 3) (NumC 5) (NumC 5))) (NumC 2))) top-env)))
 
 
-#;(check-equal? (interp (AppC (IdC '-) (list (NumC 1) (NumC 2))) top-env) (NumV -1))
-#;(check-equal? (interp (AppC (IdC '*) (list (NumC 1) (NumC 2))) top-env) (NumV 2))
-#;(check-equal? (interp (AppC (IdC '/) (list (NumC 1) (NumC 2))) top-env) (NumV 1/2))
-#;(check-equal? (interp (AppC (IdC '+) (list (NumC 1) (NumC 2))) top-env) (NumV 3))
+(check-equal? (interp (AppC (IdC '-) (list (NumC 1) (NumC 2))) top-env (create-store 35)) (NumV -1))
+(check-equal? (interp (AppC (IdC '*) (list (NumC 1) (NumC 2))) top-env (create-store 35)) (NumV 2))
+(check-equal? (interp (AppC (IdC '/) (list (NumC 1) (NumC 2))) top-env (create-store 35)) (NumV 1/2))
+(check-equal? (interp (AppC (IdC '+) (list (NumC 1) (NumC 2))) top-env (create-store 35)) (NumV 3))
+
 #;(check-equal? (interp (AppC (IdC 'equal?) (list (NumC 3) (AppC (IdC '+) (list
                                                      (NumC 1) (NumC 2))))) top-env) (BoolV #t))
 #;(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (NumC 3) (NumC 3))) (AppC (IdC '+)
