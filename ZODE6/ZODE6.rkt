@@ -181,8 +181,6 @@
     [(> end (string-length str)) (error 'sub-string "ZODE: End needs to less than/equal to string length")]
     [else (substring str start end)]))
 
-
-
 ;; applies the given operator
 (define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
   (match args
@@ -485,6 +483,8 @@ Results:
 (check-equal? (apply-++ (list (NumV 8) (BoolV #t))) (StrV "8true"))
 (check-equal? (apply-++ (list (NumV 8) (BoolV #f))) (StrV "8false"))
 (check-equal? (apply-++ (list (PrimV '+) (BoolV #f))) (StrV "+false"))
+
+
 
 ;interp test cases
 #;(check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+)
