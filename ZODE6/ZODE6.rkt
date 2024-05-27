@@ -71,8 +71,10 @@
 |#
 (define (parse [exp : Sexp]) : ExprC
   (match exp
-    [(? real? n) (NumC n)] ;<num>
-    [(? string? s) (StrC s)] ;<string>
+    ;<num>
+    [(? real? n) (NumC n)]
+    ;<string>
+    [(? string? s) (StrC s)] 
     ; { if : ‹expr› : ‹expr› : ‹expr› }
     [(list 'if ': cond ': then ': else) (IfC (parse cond) (parse then) (parse else))] 
     ; { locals : ‹clauses› : ‹expr› }
@@ -83,6 +85,8 @@
      (unless (andmap symbol? id)  
        (error "ZODE: identifier cannot be a number, got: ~e" exp))
      (LambC (parse-ids (cast id (Listof Symbol))) (parse exp))]
+    ; { mut : <id> : <expr>}
+    [(list 'mut ': id ': new-exp) (MutC (parse id) (parse new-exp))]
     ; { ‹expr› ‹expr›* }
     [(list fun args ...) (AppC (parse fun) (map parse args))]
     [(? symbol? i)
@@ -177,8 +181,6 @@
     [(< start 0) (error 'sub-string "ZODE: Start needs to be 0 or greater")]
     [(> end (string-length str)) (error 'sub-string "ZODE: End needs to less than/equal to string length")]
     [else (substring str start end)]))
-
-
 
 ;; applies the given operator
 (define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
@@ -497,6 +499,8 @@ Results:
 (check-equal? (apply-++ (list (NumV 8) (BoolV #t))) (StrV "8true"))
 (check-equal? (apply-++ (list (NumV 8) (BoolV #f))) (StrV "8false"))
 (check-equal? (apply-++ (list (PrimV '+) (BoolV #f))) (StrV "+false"))
+
+
 
 ;interp test cases
 #;(check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+)
