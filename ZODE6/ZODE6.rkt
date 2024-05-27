@@ -12,7 +12,7 @@
 (struct IfC ([cond : ExprC] [then : ExprC] [else : ExprC]) #:transparent)
 (struct LambC ([id : (Listof Symbol)] [exp : ExprC]) #:transparent)
 (struct AppC ([fun : ExprC] [args : (Listof ExprC)]) #:transparent)
-(struct MutC ([orig : ExprC] [new : ExprC]) #:transparent)
+(struct MutC ([orig : IdC] [new : ExprC]) #:transparent)
 
 #|Values|#
 (define-type Value (U BoolV NumV StrV PrimV CloV NullV))
@@ -26,6 +26,7 @@
 (struct Binding ([name : Symbol] [loc : Integer]) #:transparent)
 
 (define-type Environment (Listof Binding))
+(define-type Store (Mutable-Vectorof Value))
 
 
 #|Top Level Environment|#
@@ -282,20 +283,35 @@ Input: ExprC Env, Output: Value
 (define (create-store [size : Integer])
   (cond
     [(< size 16) (error 'create-store "ZODE: Allocated Memory Insufficient")]
-    [else (vector-append top-store (cast (make-vector (- size 16) (BoolV #f)) (Mutable-Vectorof Value)))]))
+    [else (vector-append top-store (cast (make-vector (- size 16) (BoolV #f)) Store))]))
 
 
 
 ;;add-env
 (define (add-env [env : Environment] [args : (Listof Value)] [params :
-                                                     (Listof Symbol)] [store : (Vectorof Value)]) : Environment
+                                                     (Listof Symbol)] [store : Store]) : Environment
   (cond
     [(empty? args) env]
     [else (cons (let ([index (add-store (first args) store)]) (Binding (first params) index))
                 (add-env env (rest args) (rest params) store))]))
 
+;;mutate-store
+(define (mutate-store [env : Environment] [store : Store] [orig : IdC] [new : ExprC]) : NullV
+  (cond
+    [(empty? env) (error 'mutate-store "ZODE: unbound identifier: `e")]
+    [(equal? (Binding-name (first env)) (IdC-s orig)) (begin
+                                         (set-store store (interp new env store) (Binding-loc (first env))))]
+    [else (mutate-store (rest env) store orig new)]))
+
+;;set-store
+(define (set-store [store : Store] [value : Value] [index : Integer]) : NullV
+  (vector-set! store index value)
+  (NullV 'null))
+
+
+
 ;;add-store
-(define (add-store [v : Value] [store : (Vectorof Value)]) : Integer
+(define (add-store [v : Value] [store : Store]) : Integer
   
   (let ([index (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)])
     (cond
@@ -309,7 +325,7 @@ Input: ExprC Env, Output: Value
 
 
 ;;allocate
-(define (allocate [store : (Vectorof Value)] [values : (Listof Value)]) : Integer
+(define (allocate [store : Store] [values : (Listof Value)]) : Integer
   (let ([base (add-store (first values) store)])
     (cond
       [(empty? (rest values)) base]
@@ -318,21 +334,21 @@ Input: ExprC Env, Output: Value
 
 
 ;;interp-IdC
-(define (interp-id [s : Symbol] [env : Environment] [store : (Mutable-Vectorof Value)]) : Value
+(define (interp-id [s : Symbol] [env : Environment] [store : Store]) : Value
   (cond
     [(empty? env) (error 'interp-id "ZODE: No parameter matching id: ~e" s)]
     [(equal? s (Binding-name (first env))) (vector-ref store (Binding-loc (first env)))]
     [else (interp-id s (rest env) store)]))
 
 ;;interp-args
-(define (interp-args [args : (Listof ExprC)] [env : Environment] [store : (Mutable-Vectorof Value)]) : (Listof Value)
+(define (interp-args [args : (Listof ExprC)] [env : Environment] [store : Store]) : (Listof Value)
   (cond
     [(empty? args) '()]
     [else (cons (interp (first args) env store)(interp-args (rest args) env store))]))
 
 ;interp
 ;;accepts an ExprC and a list of function definitions and returns a Real number (the value)
-(define (interp [exp : ExprC] [env : Environment] [store : (Mutable-Vectorof Value)]) : Value
+(define (interp [exp : ExprC] [env : Environment] [store : Store]) : Value
   (match exp
     [(NumC n) (NumV n)]
     [(StrC str) (StrV str)]
@@ -365,7 +381,7 @@ Input: ExprC Env, Output: Value
 
 ;;top-interp
 (define (top-interp [s : Sexp] [memsize : Integer]) : String
-  (serialize (interp (parse s) top-env (cast (make-vector memsize) (Mutable-Vectorof Value)))))
+  (serialize (interp (parse s) top-env (cast (make-vector memsize) Store))))
 
 
 ;; PROGRAM: Euclidean Algorithm for GCD
