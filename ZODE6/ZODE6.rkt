@@ -12,7 +12,7 @@
 (struct IfC ([cond : ExprC] [then : ExprC] [else : ExprC]) #:transparent)
 (struct LambC ([id : (Listof Symbol)] [exp : ExprC]) #:transparent)
 (struct AppC ([fun : ExprC] [args : (Listof ExprC)]) #:transparent)
-(struct MutC ([orig : ExprC] [new : ExprC]) #:transparent)
+(struct MutC ([orig : IdC] [new : ExprC]) #:transparent)
 
 #|Values|#
 (define-type Value (U BoolV NumV StrV PrimV CloV NullV))
@@ -70,8 +70,10 @@
 |#
 (define (parse [exp : Sexp]) : ExprC
   (match exp
-    [(? real? n) (NumC n)] ;<num>
-    [(? string? s) (StrC s)] ;<string>
+    ;<num>
+    [(? real? n) (NumC n)]
+    ;<string>
+    [(? string? s) (StrC s)] 
     ; { if : ‹expr› : ‹expr› : ‹expr› }
     [(list 'if ': cond ': then ': else) (IfC (parse cond) (parse then) (parse else))] 
     ; { locals : ‹clauses› : ‹expr› }
@@ -82,6 +84,8 @@
      (unless (andmap symbol? id)  
        (error "ZODE: identifier cannot be a number, got: ~e" exp))
      (LambC (parse-ids (cast id (Listof Symbol))) (parse exp))]
+    ; { mut : <id> : <expr>}
+    [(list 'mut ': id ': new-exp) (MutC (parse id) (parse new-exp))]
     ; { ‹expr› ‹expr›* }
     [(list fun args ...) (AppC (parse fun) (map parse args))]
     [(? symbol? i)
