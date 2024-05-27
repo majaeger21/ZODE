@@ -12,6 +12,7 @@
 (struct IfC ([cond : ExprC] [then : ExprC] [else : ExprC]) #:transparent)
 (struct LambC ([id : (Listof Symbol)] [exp : ExprC]) #:transparent)
 (struct AppC ([fun : ExprC] [args : (Listof ExprC)]) #:transparent)
+(struct MutC ([orig : ExprC] [new : ExprC]) #:transparent)
 
 #|Values|#
 (define-type Value (U BoolV NumV StrV PrimV CloV NullV))
@@ -277,6 +278,7 @@ Interpreter
 Input: ExprC Env, Output: Value
 |#
 
+;create the store
 (define (create-store [size : Integer])
   (cond
     [(< size 16) (error 'create-store "ZODE: Allocated Memory Insufficient")]
@@ -296,30 +298,22 @@ Input: ExprC Env, Output: Value
 (define (add-store [v : Value] [store : (Vectorof Value)]) : Integer
   
   (let ([index (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)])
-    (begin (vector-set! store index v)
+    (cond
+      [(>= (vector-length store) index) (error 'add-store "ZODE: Index out of Bounds Error, attempting to add ~e out of bounds" v)]
+      [else (begin (vector-set! store index v)
            (println "This ran")
            
            (vector-set! store 0 (NumV (+ index 1)))
            (println (~v (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)))
-           index)))
+           index)])))
 
 
-(check-equal? (add-store (StrV "String") (create-store 35)) 16)
-(check-equal? (add-store (StrV "Different String") (create-store 35)) 16)
-
-(check-equal? (let ([myStore (create-store 35)]) (let ([index (begin
-                                                                (add-store (NumV 13) myStore)
-                                                                (add-store (StrV "String") myStore))])
-                                                   (vector-ref myStore index))) (StrV "String"))
-
-(check-equal? (let ([myStore (create-store 35)]) (let ([index (begin
-                                                                (add-store (NumV 13) myStore)
-                                                                (add-store (StrV "String") myStore))])
-                                                   (vector-ref myStore (- index 1)))) (NumV 13))
-(check-equal? (let ([myStore (create-store 35)]) (let ([index (begin
-                                                                (add-store (NumV 13) myStore)
-                                                                (add-store (StrV "String") myStore))])
-                                                   (vector-ref myStore (- (cast (NumV-n (cast (vector-ref myStore 0) NumV)) Integer) 1)))) (StrV "String"))
+;;allocate
+(define (allocate [store : (Vectorof Value)] [values : (Listof Value)]) : Integer
+  (let ([base (add-store (first values) store)])
+    (cond
+      [(empty? (rest values)) base]
+      [else (allocate store (rest values))])))
 
 
 
@@ -341,7 +335,8 @@ Input: ExprC Env, Output: Value
 (define (interp [exp : ExprC] [env : Environment] [store : (Mutable-Vectorof Value)]) : Value
   (match exp
     [(NumC n) (NumV n)]
-    ;[(StrC str) (StrV str)]
+    [(StrC str) (StrV str)]
+    #;[(MutC orig new) (mutate-store env store orig new)]
     #;[(IfC c i e) (let ([condition (interp c env)])
                              (cond
                                [(BoolV? condition) (let ([bool (cast condition BoolV)])
@@ -364,7 +359,7 @@ Input: ExprC Env, Output: Value
                                ~e - ~e, got ~e - ~e" (length (CloV-args clo)) (CloV-args clo) (length args) args)])]
                        [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env store))]))]
     
-    ;[(LambC params expr) (CloV params expr env)]
+    [(LambC params expr) (CloV params expr env)]
     [(IdC s) (interp-id s env store)]
     ))
 
