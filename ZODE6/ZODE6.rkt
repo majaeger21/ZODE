@@ -185,7 +185,7 @@
 
 
 ;;allocate
-(define (allocate [store : Store] [values : (Listof Value)]) : Integer
+#;(define (allocate [store : Store] [values : (Listof Value)]) : Integer
   (let ([base (add-store (first values) store)])
     (cond
       [(empty? (rest values)) base]
