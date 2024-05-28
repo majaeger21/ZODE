@@ -185,6 +185,29 @@
       [(empty? (rest values)) base]
       [else (allocate store (rest values))])))
 
+
+;;while
+'{locals : while = {lamb
+                   : self guard body
+                   : {if
+                      : {guard}
+                      : {seq {body}
+                             {self self guard body}}
+                      : null}}
+         : {locals : in-order = {lamb
+                                 : arr len
+                                 : {locals : i = 0 : condition = false
+                                           : {seq {while while {lamb : : {<= i len}}
+                                                         {lamb : : {if : {<= i {- len 1}}
+                                                                        : {i := {+ i 1}}
+                                                                        : {if : {<= {aref arr i} {aref arr i + 1}}
+                                                                              : {i := {+ i 1}}
+                                                                              : {condition := false}}}}}
+                                                  condition}}}
+                   : {in-order {array 3 5 6 17 18 90 104} 7}}}
+
+
+
 #| Top-level Env Functions  |#
 (define (apply-func [op : Symbol] [args : (Listof Value)] [store : Store]) : Value
   (cond
