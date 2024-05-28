@@ -143,8 +143,6 @@
     [(< size 16) (error 'create-store "ZODE: Allocated Memory Insufficient")]
     [else (vector-append top-store (cast (make-vector (- size 16) (BoolV #f)) Store))]))
 
-
-
 ;;add-env
 (define (add-env [env : Environment] [args : (Listof Value)] [params :
                                                      (Listof Symbol)] [store : Store]) : Environment
@@ -210,6 +208,22 @@
        [else (error "ZODE: Wrong amount of args")])]
     [else (error 'apply-func "ZODE: Unknown operator, got: ~e" op)]))
 
+;; applies the given operator
+(define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
+  (match args
+    [(list (NumV a) (NumV b))
+     (cond
+       [(equal? op '+) (NumV (+ a b))]
+       [(equal? op '-) (NumV (- a b))]
+       [(equal? op '*) (NumV (* a b))]
+       [(equal? op '/) (if (not (zero? b))
+                       (NumV (/ a b))
+                       (error "ZODE: Division by zero"))]
+       [(equal? op '<=) (BoolV (<= a b))]
+       [else (error "ZODE: Unknown operator, got: ~e" op)])]
+    [(list Value) (user-error (first args))]
+    [else (error "ZODE: Invalid arguments for operation")]))
+
 ;; creates a fresh array of the given size, with all cells filled with the given value
 (define (make-array [size : Integer] [value : Value] [store : Store]) : ArrayV
   (if (<= size 0)
@@ -232,12 +246,14 @@
         (ArrayV start-index (length values)))))
 
 ;; returns the contents of given element of the array 
-
+(define (aref [array : ArrayV] [index : Integer] [store : Store]) : Value
+  (let ([start-index (ArrayV-loc array)]
+        [length (ArrayV-len array)])
+    (if (or (< index 0) (>= index length))
+        (error 'aref "ZODE: Index out of range")
+        (vector-ref store (+ start-index index)))))
 
 ;; sets the given element to be the result of calling function
-
-
-;; evaluates a sequence of expressions, returning the last one
 
 
 ;; accepts a string and a start and end position and returns the corresponding substring
@@ -247,21 +263,6 @@
     [(> end (string-length str)) (error 'sub-string "ZODE: End needs to less than/equal to string length")]
     [else (substring str start end)]))
 
-;; applies the given operator
-(define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
-  (match args
-    [(list (NumV a) (NumV b))
-     (cond
-       [(equal? op '+) (NumV (+ a b))]
-       [(equal? op '-) (NumV (- a b))]
-       [(equal? op '*) (NumV (* a b))]
-       [(equal? op '/) (if (not (zero? b))
-                       (NumV (/ a b))
-                       (error "ZODE: Division by zero"))]
-       [(equal? op '<=) (BoolV (<= a b))]
-       [else (error "ZODE: Unknown operator, got: ~e" op)])]
-    [(list Value) (user-error (first args))]
-    [else (error "ZODE: Invalid arguments for operation")]))
 
 ;; handles equals?
 (define (equals? [a : Any] [b : Any]) : Boolean
@@ -555,6 +556,30 @@ Results:
 
 (check-exn #rx"ZODE: Array must contain at least one element" (lambda () (array '() (create-store 25))))
 
+;; Test cases for aref
+(let ([store (create-store 25)])
+  (let ([array (make-array 4 (NumV 42.0) store)])
+    (check-equal? (aref array 0 store) (NumV 42.0))
+    (check-equal? (aref array 1 store) (NumV 42.0))
+    (check-equal? (aref array 2 store) (NumV 42.0))
+    (check-equal? (aref array 3 store) (NumV 42.0))
+    (check-exn #rx"ZODE: Index out of range" (lambda () (aref array 4 store)))
+    (check-exn #rx"ZODE: Index out of range" (lambda () (aref array -1 store)))))
+
+(let ([store (create-store 25)])
+  (let ([array (make-array 3 (BoolV #t) store)])
+    (check-equal? (aref array 0 store) (BoolV #t))
+    (check-equal? (aref array 1 store) (BoolV #t))
+    (check-equal? (aref array 2 store) (BoolV #t))
+    (check-exn #rx"ZODE: Index out of range" (lambda () (aref array 3 store)))
+    (check-exn #rx"ZODE: Index out of range" (lambda () (aref array -1 store)))))
+
+(let ([store (create-store 25)]) 
+  (let ([array (make-array 2 (StrV "hello") store)])
+    (check-equal? (aref array 0 store) (StrV "hello"))
+    (check-equal? (aref array 1 store) (StrV "hello"))
+    (check-exn #rx"ZODE: Index out of range" (lambda () (aref array 2 store)))
+    (check-exn #rx"ZODE: Index out of range" (lambda () (aref array -1 store)))))
 
 
 ;interp test cases
