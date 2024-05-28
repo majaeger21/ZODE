@@ -186,7 +186,7 @@
       [else (allocate store (rest values))])))
 
 #| Top-level Env Functions  |#
-(define (apply-func [op : Symbol] [args : (Listof Value)]) : Value
+(define (apply-func [op : Symbol] [args : (Listof Value)] [store : Store]) : Value
   (cond
     [(equal? op '+) (apply-op '+ args)]
     [(equal? op '-) (apply-op '- args)]
@@ -206,7 +206,35 @@
      (cond
        [(equal? (length args) 2) (BoolV (equals? (first args) (first (rest args))))]
        [else (error "ZODE: Wrong amount of args")])]
+    [(equal? op 'make-array)
+     (cond 
+       [(equal? (length args) 2)
+        (let ([size (cast (NumV-n (cast (first args) NumV)) Integer)]
+              [value (second args)])
+          (make-array size value store))]
+       [else (error 'apply-func "ZODE: make-array expects 2 arguments")])]
+    [(equal? op 'array)
+     (cond
+       [(> (length args) 0) (array args store)]
+       [else (error 'apply-func "ZODE: array expects at least 1 argument")])]
+    [(equal? op 'aref)
+     (cond
+       [(equal? (length args) 2)
+        (let ([arr (cast (first args) ArrayV)]
+              [index (cast (NumV-n (cast (second args) NumV)) Integer)])
+          (aref arr index store))]
+       [else (error 'apply-func "ZODE: aref expects 2 arguments")])]
+    [(equal? op 'aset!)
+     (cond
+       [(equal? (length args) 3)
+        (let ([arr (cast (first args) ArrayV)]
+              [index (cast (NumV-n (cast (second args) NumV)) Integer)]
+              [new (third args)])
+          (aset! store arr index new))]
+       [else (error 'apply-func "ZODE: aset! expects 3 arguments")])]
+ 
     [else (error 'apply-func "ZODE: Unknown operator, got: ~e" op)]))
+
 
 ;; applies the given operator
 (define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
@@ -254,8 +282,6 @@
         (vector-ref store (+ start-index index)))))
 
 ;; sets the given element to be the result of calling function
-
-;;aset!
 (define (aset! [store : Store] [arr : ArrayV] [index : Integer] [new : Value]) : NullV
   (cond
     [(or (< index 0) (>= index (ArrayV-len arr))) (error 'aset! "ZODE: Index out of Bounds Error, attempting to add ~e out of bounds" new)]
@@ -393,7 +419,7 @@ Input: ExprC Env, Output: Value
                                       (CloV-body clo) (add-env (CloV-env clo) (interp-args args env) (CloV-args clo)))]
                          [else (error 'interp "ZODE: Number of Argument Mismatch, expected
                                ~e - ~e, got ~e - ~e" (length (CloV-args clo)) (CloV-args clo) (length args) args)])]
-                       [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env store))]))]
+                       [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env store) store)]))]
     
     [(LambC params expr) (CloV params expr env)]
     [(IdC s) (interp-id s env store)]
@@ -488,23 +514,24 @@ Results:
 (check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse-clauses '{})))
 
 ;;Top-level Env Functions
-(check-equal? (apply-func '+ (list (NumV 5) (NumV 3))) (NumV 8))
-(check-equal? (apply-func '- (list (NumV 10) (NumV 4))) (NumV 6))
-(check-equal? (apply-func '* (list (NumV 7) (NumV 2))) (NumV 14))
-(check-equal? (apply-func '/ (list (NumV 12) (NumV 4))) (NumV 3))
-(check-exn #rx"ZODE: Division by zero" (lambda () (apply-func '/ (list (NumV 3) (NumV 0)))))
-(check-equal? (apply-func '<= (list (NumV 12) (NumV 4))) (BoolV #f))
-(check-equal? (apply-func '<= (list (NumV 4) (NumV 4))) (BoolV #t))
-(check-equal? (apply-func '<= (list (NumV 3) (NumV 4))) (BoolV #t))
-(check-exn #rx"ZODE: Unknown operator, got: " (lambda () (apply-func 'j (list (NumV 3) (NumV 0)))))
+(define store (create-store 50))
+(check-equal? (apply-func '+ (list (NumV 5) (NumV 3)) store) (NumV 8))
+(check-equal? (apply-func '- (list (NumV 10) (NumV 4)) store) (NumV 6))
+(check-equal? (apply-func '* (list (NumV 7) (NumV 2)) store) (NumV 14))
+(check-equal? (apply-func '/ (list (NumV 12) (NumV 4)) store) (NumV 3))
+(check-exn #rx"ZODE: Division by zero" (lambda () (apply-func '/ (list (NumV 3) (NumV 0)) store)))
+(check-equal? (apply-func '<= (list (NumV 12) (NumV 4)) store) (BoolV #f))
+(check-equal? (apply-func '<= (list (NumV 4) (NumV 4)) store) (BoolV #t))
+(check-equal? (apply-func '<= (list (NumV 3) (NumV 4)) store) (BoolV #t))
+(check-exn #rx"ZODE: Unknown operator, got: " (lambda () (apply-func 'j (list (NumV 3) (NumV 0)) store)))
 (check-exn #rx"ZODE: Unknown operator, got: " (lambda () (apply-op 'j (list (NumV 3) (NumV 0)))))
 (check-exn #rx"ZODE: Invalid arguments for operation" (lambda () (apply-op 'j (list (BoolV #t) (NumV 0)))))
-(check-equal? (apply-func 'equal? (list (NumV 5) (NumV 6))) (BoolV #f))
-(check-equal? (apply-func 'equal? (list (NumV 6) (NumV 6))) (BoolV #t))
-(check-equal? (apply-func 'equal? (list (StrV "hi") (StrV "hi"))) (BoolV #t))
-(check-equal? (apply-func 'equal? (list (BoolV #t) (BoolV #f))) (BoolV #f))
+(check-equal? (apply-func 'equal? (list (NumV 5) (NumV 6)) store) (BoolV #f))
+(check-equal? (apply-func 'equal? (list (NumV 6) (NumV 6)) store) (BoolV #t))
+(check-equal? (apply-func 'equal? (list (StrV "hi") (StrV "hi")) store) (BoolV #t))
+(check-equal? (apply-func 'equal? (list (BoolV #t) (BoolV #f)) store) (BoolV #f))
 (check-exn #rx"ZODE: Wrong amount of args" (lambda () (apply-func 'equal? (list (NumV 5)
-                                                                                (NumV 6) (NumV 3)))))
+                                                                                (NumV 6) (NumV 3)) store)))
 ;(check-equal? (apply-read-num) 4)
 ;(check-exn #rx"ZODE: Expected a Real Number" (lambda () (apply-read-num)))
 ;(check-equal? (apply-read-str) "hello world")
