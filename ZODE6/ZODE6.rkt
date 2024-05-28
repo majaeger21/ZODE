@@ -99,13 +99,19 @@
     ; { mut : <id> : <expr>}
     [(list id ':= new-exp) (MutC (IdC (cast id Symbol)) (parse new-exp))]
     ; { ‹expr› ‹expr›* }
-    [(list fun args ...) (AppC (parse fun) (map parse args))]
+    [(list fun args ...) (let ([parsed-fun (parse fun)])
+                           
+                           (cond
+                             [(equal? parsed-fun (IdC ':=)) (error 'parse
+                                            "ZODE: Mutation Operator is an Infix Operator")]
+                             [else (AppC parsed-fun (map parse args))]))]
     [(? symbol? i)
      (cond
        [(not-valid-identifier? i) (error "ZODE: invalid identifier, got: ~e" i)]
        [else (IdC i)])]
     [other (error 'parse "ZODE: expected valid expression, got: ~e" other)]))
 
+;;parse-ids: takes in a list of symbols and parses them
 (define (parse-ids [lst : (Listof Symbol)]) : (Listof Symbol)
   (cond 
     [(empty? lst) '()]
@@ -114,6 +120,7 @@
             [(not (unique-args? lst)) (error "ZODE: duplicate identifier found: ~e" lst)]
             [else (cons (first lst) (parse-ids (rest lst)))])]))
 
+;;parse-clauses: takes in a Sexp and returns a list of symbols and a list of expressions
 (define (parse-clauses [exp : Sexp]) : (List (Listof Symbol) (Listof ExprC))
   (match exp
     ; ‹id› = ‹expr›
@@ -127,27 +134,31 @@
     [other
      (error 'parse-clauses "ZODE: expected valid expression, got: ~e" other)]))
 
+;;checks to see if it is not a valid id
 (define (not-valid-identifier? id)
   (member id '(if lamb locals : =)))
 
+;;does the exact opposite
 (: is-valid-identifier? (-> Any Boolean : #:+ Symbol))
 (define (is-valid-identifier? id)
   (and (symbol? id)
        (not (member id '(if lamb locals : =)))))
 
+;;checks to see if the symbol is already in use
 (define (contains? [sym : Symbol] [args : (Listof Symbol)]) : Boolean
   (cond
     [(empty? args) #f]
     [(equal? sym (first args)) #t]
     [else (contains? sym (rest args))]))
 
+;;checks to make sure arguments are unique
 (define (unique-args? [args : (Listof Symbol)]) : Boolean
   (cond
     [(empty? args) #t]
     [(contains? (first args) (rest args)) #f]
     [else (unique-args? (rest args))]))
 
-;create the store
+;create the store using a given size
 (define (create-store [size : Integer])
   (cond
     [(< size 21) (error 'create-store "ZODE: Allocated Memory Insufficient")]
@@ -155,7 +166,7 @@
 
 (check-exn #rx"ZODE: Allocated" (lambda () (create-store 10)))
 
-;;add-env
+;;add-env: adds bindings to the environment
 (define (add-env [env : Environment] [args : (Listof Value)] [params :
                                                      (Listof Symbol)] [store : Store]) : Environment
   (cond
@@ -163,7 +174,7 @@
     [else (cons (let ([index (add-store (first args) store)]) (Binding (first params) index))
                 (add-env env (rest args) (rest params) store))]))
 
-;;mutate-store
+;;mutate-store : takes in a original id and a new expression and reassigns the original to the new
 (define (mutate-store [env : Environment] [store : Store] [orig : IdC] [new : ExprC]) : NullV
   (cond
     [(empty? env) (error 'mutate-store "ZODE: unbound identifier: `e")]
@@ -173,24 +184,24 @@
 
 (check-exn #rx"ZODE: unbound" (lambda () (mutate-store top-env (create-store 35) (IdC 'x) (NumC 34))))
 
-;;set-store
+;;set-store : sets a given item in the store to a new value
 (define (set-store [store : Store] [value : Value] [index : Integer]) : NullV
   (vector-set! store index value)
   (NullV 'null))
 
-;;add-store
+;;add-store : adds an item to the store
 (define (add-store [v : Value] [store : Store]) : Integer
   
   (let ([index (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)])
-    (println (~v index))
+    
     (cond
       [(<= (vector-length store) index) (error 'add-store
-                "ZODE: Index out of Bounds Error, attempting to add ~e out of bounds" v)]
+                "ZODE: Index out of Bounds Error, attempting to add at index ~e: ~e out of bounds" index v)]
       [else (begin (vector-set! store index v)
-           (println "This ran")
+           
            
            (vector-set! store 0 (NumV (+ index 1)))
-           (println (~v (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)))
+           
            index)])))
 
 (check-exn #rx"ZODE: Index" (lambda () (add-store (NumV 0) top-store)))
@@ -205,24 +216,24 @@
 
 
 ;;while
-'{locals : while = {lamb
+(define while '{lamb
                    : self guard body
                    : {if
                       : {guard}
                       : {seq {body}
                              {self self guard body}}
-                      : null}}
-         : {locals : in-order = {lamb
+                      : null}})
+
+(define in-order '{lamb
                                  : arr len
-                                 : {locals : i = 0 : condition = false
+                                 : {locals : i = 0 : condition = true
                                            : {seq {while while {lamb : : {<= i len}}
-                                                         {lamb : : {if : {<= i {- len 1}}
+                                                         {lamb : : {if : {<= {- len 1} i}
                                                                         : {i := {+ i 1}}
-                                                                        : {if : {<= {aref arr i} {aref arr i + 1}}
+                                                                        : {if : {<= {aref arr i} {aref arr {+ i 1}}}
                                                                               : {i := {+ i 1}}
                                                                               : {condition := false}}}}}
-                                                  condition}}}
-                   : {in-order {array 3 5 6 17 18 90 104} 7}}}
+                                                  condition}}})
 
 
 
@@ -253,7 +264,10 @@
     [(equal? op 'make-array)
      (cond 
        [(equal? (length args) 2)
-        (let ([size (cast (NumV-n (cast (first args) NumV)) Integer)]
+        (let ([size (cast (let ([num (NumV-n (cast (first args) NumV))])
+                             (cond
+                               [(integer? num) num]
+                               [else (error 'apply-func "ZODE: Not an integer")])) Integer)]
               [value (second args)])
           (make-array size value store))]
        [else (error 'apply-func "ZODE: make-array expects 2 arguments")])]
@@ -269,7 +283,10 @@
      (cond
        [(equal? (length args) 3)
         (let ([arr (cast (first args) ArrayV)]
-              [index (cast (NumV-n (cast (second args) NumV)) Integer)]
+              [index (cast (let ([num (NumV-n (cast (second args) NumV))])
+                             (cond
+                               [(integer? num) num]
+                               [else (error 'apply-func "ZODE: Not an integer")])) Integer)]
               [new (third args)])
           (aset! store arr index new))]
        [else (error 'apply-func "ZODE: aset! expects 3 arguments")])]
@@ -277,8 +294,14 @@
      (cond
        [(equal? (length args) 3)
         (let ([str-index (add-store (first args) store)]
-              [start (cast (NumV-n (cast (second args) NumV)) Integer)]
-              [end (cast (NumV-n (cast (third args) NumV)) Integer)])
+              [start (cast (let ([num (NumV-n (cast (second args) NumV))])
+                             (cond
+                               [(integer? num) num]
+                               [else (error 'apply-func "ZODE: Not an integer")])) Integer)]
+              [end (cast (let ([num (NumV-n (cast (third args) NumV))])
+                             (cond
+                               [(integer? num) num]
+                               [else (error 'apply-func "ZODE: Not an integer")])) Integer)])
           (sub-string str-index start end store))]
        [else (error 'apply-func "ZODE: substring expects 3 arguments, got ~e" (~v args))])]
     [else (error 'apply-func "ZODE: Unknown operator, got: ~e" op)]))
@@ -306,6 +329,7 @@
       (let ([start-index (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)])
         (for ([i (in-range size)])
           (cond
+            [(>= (+ start-index i) (vector-length store)) (error 'make-array "ZODE: Index Out of Bounds")]
             [(<= (+ 2 start-index) (vector-length store))(vector-set! store (+ start-index i) value)]))
         (vector-set! store 0 (NumV (+ start-index size)))
         (ArrayV start-index size))))
@@ -326,7 +350,7 @@
   (let ([start-index (ArrayV-loc array)]
         [length (ArrayV-len array)])
     (if (or (< index 0) (>= index length))
-        (error 'aref "ZODE: Index out of range")
+        (error 'aref "ZODE: Index out of range for array of length ~e and index ~e" length index)
         (vector-ref store (+ start-index index)))))
 
 ;; sets the given element to be the result of calling function
@@ -611,13 +635,17 @@ Results:
 (check-equal? (apply-++ (list (PrimV '+) (BoolV #f))) (StrV "+false"))
 
 ;; apply-func test cases for 'make-array, 'array, 'aref, 'aset!, 'sub-string 
-(let ([store (create-store 25)])
+(let ([store (create-store 50)])
   ;; Test make-array with size 3 and value 0.0
   (check-equal? (apply-func 'make-array (list (NumV 3) (NumV 0.0)) store) (ArrayV 21 3))
   (check-equal? (vector-ref store 21) (NumV 0.0))
   (check-equal? (vector-ref store 22) (NumV 0.0))
   (check-equal? (vector-ref store 23) (NumV 0.0))
-  (check-equal? (vector-ref store 0) (NumV 24)))
+  (check-equal? (vector-ref store 0) (NumV 24))
+  (check-exn #rx"ZODE:" (lambda () (apply-func 'make-array (list (NumV 3.4) (NumV 0.0)) store)))
+  (check-exn #rx"ZODE:" (lambda () (apply-func 'make-array (list (NumV 200) (NumV 0.0)) store))))
+
+
 
 
 (let ([store (create-store 25)])
@@ -706,6 +734,9 @@ Results:
   ;; Test error for aset! with incorrect number of arguments
   (check-exn #rx"ZODE: aset! expects 3 arguments" 
              (lambda () (apply-func 'aset! (list (ArrayV 0 10) (NumV 0)) store)))
+
+  (check-exn #rx"ZODE:" 
+             (lambda () (apply-func 'aset! (list (ArrayV 0 10) (NumV 2.3) (NumV 10)) store)))
 
   ;; Test error for sub-string with incorrect number of arguments
   (check-exn #rx"ZODE: substring expects 3 arguments" 
@@ -861,22 +892,40 @@ Results:
 
 (let ([store (create-store 50)])
   ;; Store the string "hello world" at index 21
-  (vector-set! store 21 (StrV "hello world"))
+  ;(vector-set! store 21 (StrV "hello world"))
 
   ;; Test sub-string with valid range
-  (check-equal? (apply-func 'substring (list (NumV 21) (NumV 0) (NumV 5)) store) (StrV "hello"))
-  (check-equal? (apply-func 'substring (list (NumV 21) (NumV 6) (NumV 11)) store) (StrV "world"))
-  (check-equal? (apply-func 'substring (list (NumV 21) (NumV 3) (NumV 8)) store) (StrV "lo wo"))
+  (check-equal? (apply-func 'substring (list (StrV "hello world") (NumV 0) (NumV 5)) store) (StrV "hello"))
+  (check-equal? (apply-func 'substring (list (StrV "hello world") (NumV 6) (NumV 11)) store) (StrV "world"))
+  (check-equal? (apply-func 'substring (list (StrV "hello world") (NumV 3) (NumV 8)) store) (StrV "lo wo"))
+  (check-exn #rx"ZODE:" (lambda () (apply-func 'substring (list (StrV "hello world") (NumV 3.2) (NumV 8)) store)))
+  (check-exn #rx"ZODE:" (lambda () (apply-func 'substring (list (StrV "hello world") (NumV 3) (NumV 8.4)) store)))
 
   ;; Test sub-string with start index out of range
   (check-exn #rx"ZODE: Start needs to be 0 or greater" (lambda ()
-                                     (apply-func 'substring (list (NumV 21) (NumV -1) (NumV 5)) store)))
+                                     (apply-func 'substring (list (StrV "hello world") (NumV -1) (NumV 5)) store)))
 
   ;; Test sub-string with end index out of range
   (check-exn #rx"ZODE: End needs to be less than/equal to string length"
-            (lambda () (apply-func 'substring (list (NumV 21) (NumV 0) (NumV 12)) store)))
+            (lambda () (apply-func 'substring (list (StrV "hello world") (NumV 0) (NumV 12)) store)))
 
   ;; Test sub-string with start index greater than end index
   (check-exn #rx"ZODE: Start must be less than end" (lambda ()
-                                     (apply-func 'substring (list (NumV 21) (NumV 5) (NumV 3)) store)))
+                                     (apply-func 'substring (list (StrV "hello world") (NumV 5) (NumV 3)) store)))
 )
+
+(check-exn #rx"ZODE:" (lambda () (parse '(:= true false null))))
+
+#;(check-equal? (top-interp (list 'locals
+                  ': 'while '= while
+                  ': (list 'locals
+                           ': 'in-order '= in-order
+                           ': '{+ {if : {in-order {array 1 2 3 4 5} 5}
+                                      : 0
+                                      : 1}
+                                  {if : {in-order {array 5 2 3 4 5} 5}
+                                      : 0
+                                      : 1}})) 100) "1")
+
+
+
