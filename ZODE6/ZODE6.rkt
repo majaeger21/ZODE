@@ -236,10 +236,7 @@
               [value (second args)])
           (make-array size value store))]
        [else (error 'apply-func "ZODE: make-array expects 2 arguments")])]
-    [(equal? op 'array)
-     (cond
-       [(> (length args) 0) (array args store)]
-       [else (error 'apply-func "ZODE: array expects at least 1 argument")])]
+    [(equal? op 'array) (array args store)]
     [(equal? op 'aref)
      (cond
        [(equal? (length args) 2)
@@ -258,13 +255,12 @@
     [(equal? op 'sub-string)
      (cond
        [(equal? (length args) 3)
-        (let ([str (StrV-s (cast (first args) StrV))]
+        (let ([str-index (cast (NumV-n (cast (first args) NumV)) Integer)]
               [start (cast (NumV-n (cast (second args) NumV)) Integer)]
               [end (cast (NumV-n (cast (third args) NumV)) Integer)])
-          (StrV (sub-string str start end)))]
+          (sub-string str-index start end store))]
        [else (error 'apply-func "ZODE: sub-string expects 3 arguments")])]
     [else (error 'apply-func "ZODE: Unknown operator, got: ~e" op)]))
-
 
 ;; applies the given operator
 (define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
@@ -319,12 +315,14 @@
 
 
 ;; accepts a string and a start and end position and returns the corresponding substring
-(define (sub-string [str : String] [start : Integer] [end : Integer]) : String
-  (cond
-    [(< start 0) (error 'sub-string "ZODE: Start needs to be 0 or greater")]
-    [(> end (string-length str)) (error 'sub-string "ZODE: End needs to less than/equal to string length")]
-    [else (substring str start end)]))
-
+(define (sub-string [str-index : Integer] [start : Integer] [end : Integer] [store : Store]) : StrV
+  (let* ([str-val (vector-ref store str-index)]
+         [s (StrV-s (cast str-val StrV))])
+    (cond
+      [(< start 0) (error 'sub-string "ZODE: Start needs to be 0 or greater")]
+      [(> end (string-length s)) (error 'sub-string "ZODE: End needs to be less than/equal to string length")]
+      [(>= start end) (error 'sub-string "ZODE: Start must be less than end")]
+      [else (StrV (substring s start end))])))
 
 ;; handles equals?
 (define (equals? [a : Any] [b : Any]) : Boolean
@@ -574,6 +572,77 @@ Results:
 (check-equal? (apply-++ (list (NumV 8) (BoolV #t))) (StrV "8true"))
 (check-equal? (apply-++ (list (NumV 8) (BoolV #f))) (StrV "8false"))
 (check-equal? (apply-++ (list (PrimV '+) (BoolV #f))) (StrV "+false"))
+
+;; apply-func test cases for 'make-array, 'array, 'aref, 'aset!, 'sub-string 
+(let ([store (create-store 25)])
+  ;; Test make-array with size 3 and value 0.0
+  (check-equal? (apply-func 'make-array (list (NumV 3) (NumV 0.0)) store) (ArrayV 16 3))
+  (check-equal? (vector-ref store 16) (NumV 0.0))
+  (check-equal? (vector-ref store 17) (NumV 0.0))
+  (check-equal? (vector-ref store 18) (NumV 0.0))
+  (check-equal? (vector-ref store 0) (NumV 19)))
+'apply-func "ZODE: make-array expects 2 arguments"
+
+(let ([store (create-store 25)])
+  ;; Test make-array with invalid size 0
+  (check-exn #rx"ZODE: Size must be greater than 0" (lambda () (apply-func 'make-array (list (NumV 0) (NumV 0.0)) store))))
+
+(let ([store (create-store 25)])
+  ;; Test array with two string values
+  (check-equal? (apply-func 'array (list (StrV "hello") (StrV "world")) store) (ArrayV 16 2))
+  (check-equal? (vector-ref store 16) (StrV "hello"))
+  (check-equal? (vector-ref store 17) (StrV "world"))
+  (check-equal? (vector-ref store 0) (NumV 18)))
+
+(let ([store (create-store 25)])
+  ;; Test array with invalid empty list
+  (check-exn #rx"ZODE: Array must contain at least one element" (lambda () (apply-func 'array '() store))))
+
+(let ([store (create-store 25)])
+  ;; Create an array using array with multiple values
+  (define arr (apply-func 'array (list (NumV 1) (NumV 2) (NumV 3)) store))
+  ;; Test aref to access elements within the array
+  (check-equal? (apply-func 'aref (list arr (NumV 0)) store) (NumV 1))
+  (check-equal? (apply-func 'aref (list arr (NumV 1)) store) (NumV 2))
+  (check-equal? (apply-func 'aref (list arr (NumV 2)) store) (NumV 3))
+  ;; Test aref to access an out-of-bounds index
+  (check-exn #rx"ZODE: Index out of range" (lambda () (apply-func 'aref (list arr (NumV 3)) store)))
+  (check-exn #rx"ZODE: Index out of range" (lambda () (apply-func 'aref (list arr (NumV -1)) store))))
+
+(let ([store (create-store 25)])
+  ;; Create an array using array with multiple values
+  (define arr (apply-func 'array (list (NumV 1) (NumV 2) (NumV 3)) store))
+  ;; Test aset! to set elements within the array
+  (apply-func 'aset! (list arr (NumV 0) (NumV 4)) store)
+  (apply-func 'aset! (list arr (NumV 1) (NumV 5)) store)
+  (apply-func 'aset! (list arr (NumV 2) (NumV 6)) store)
+  ;; Verify the changes in the store
+  (check-equal? (vector-ref store 16) (NumV 4))
+  (check-equal? (vector-ref store 17) (NumV 5))
+  (check-equal? (vector-ref store 18) (NumV 6))
+  ;; Test aset! to set an out-of-bounds index
+  (check-exn #rx"ZODE: Index out of Bounds Error" (lambda () (apply-func 'aset! (list arr (NumV 3) (NumV 7)) store)))
+  (check-exn #rx"ZODE: Index out of Bounds Error" (lambda () (apply-func 'aset! (list arr (NumV -1) (NumV 7)) store))))
+
+(let ([store (create-store 25)])
+  ;; Store the string "hello world" at index 16
+  (vector-set! store 16 (StrV "hello world"))
+
+  ;; Test sub-string with valid range
+  (check-equal? (sub-string 16 0 5 store) (StrV "hello"))
+  (check-equal? (sub-string 16 6 11 store) (StrV "world"))
+  (check-equal? (sub-string 16 3 8 store) (StrV "lo wo"))
+
+  ;; Test sub-string with start index out of range
+  (check-exn #rx"ZODE: Start needs to be 0 or greater" (lambda () (sub-string 16 -1 5 store)))
+
+  ;; Test sub-string with end index out of range
+  (check-exn #rx"ZODE: End needs to be less than/equal to string length" (lambda () (sub-string 16 0 12 store)))
+
+  ;; Test sub-string with start index greater than end index
+  (check-exn #rx"ZODE: Start must be less than end" (lambda () (sub-string 16 5 3 store)))
+)
+
 
 ;; Test cases for make-array
 (let ([store (create-store 25)]) ;; Ensure sufficient size for operations
