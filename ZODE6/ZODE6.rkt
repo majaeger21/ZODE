@@ -255,6 +255,12 @@
 
 ;; sets the given element to be the result of calling function
 
+;;aset!
+(define (aset! [store : Store] [arr : ArrayV] [index : Integer] [new : Value]) : NullV
+  (cond
+    [(or (< index 0) (>= index (ArrayV-len arr))) (error 'aset! "ZODE: Index out of Bounds Error, attempting to add ~e out of bounds" new)]
+    [else (set-store store new (+ (ArrayV-loc arr) index))]))
+
 
 ;; accepts a string and a start and end position and returns the corresponding substring
 (define (sub-string [str : String] [start : Integer] [end : Integer]) : String
