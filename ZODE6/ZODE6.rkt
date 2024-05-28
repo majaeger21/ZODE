@@ -15,13 +15,14 @@
 (struct MutC ([orig : IdC] [new : ExprC]) #:transparent)
 
 #|Values|#
-(define-type Value (U BoolV NumV StrV PrimV CloV NullV))
+(define-type Value (U BoolV NumV StrV PrimV CloV NullV ArrayV))
 (struct NumV ([n : Real]) #:transparent)
 (struct StrV ([s : String]) #:transparent)
 (struct BoolV ([b : Boolean]) #:transparent)
 (struct PrimV ([p : Symbol]) #:transparent)
 (struct NullV ([nu : Symbol]) #:transparent)
 (struct CloV ([args : (Listof Symbol)] [body : ExprC] [env : Environment]) #:transparent)
+(struct ArrayV ([loc : Integer] [len : Integer]))
 
 (struct Binding ([name : Symbol] [loc : Integer]) #:transparent)
 
@@ -210,18 +211,20 @@
     [else (error 'apply-func "ZODE: Unknown operator, got: ~e" op)]))
 
 ;; creates a fresh array of the given size, with all cells filled with the given value
-(define (make-array [size : Integer] [value : Value] [store : Store]) : Store
+#;(define (make-array [size : Integer] [value : Value] [store : Store]) : Store
   (if (<= size 0)
       (error 'make-array "ZODE: Size must be greater than 0")
       (let ([arr (make-vector size value)])
         (allocate store (vector->list arr))
         store)))
 
-(check-equal? (make-array 3 (NumV 0.0) (create-store 20)) 
-              (vector-append top-store (vector (NumV 0.0) (NumV 0.0) (NumV 0.0))))
-(check-equal? (make-array 5 (BoolV #t) (create-store 20)) 
-              (vector-append top-store (vector (BoolV #t) (BoolV #t) (BoolV #t) (BoolV #t) (BoolV #t))))
-(check-equal? (make-array 2 (NullV 'null) (create-store 20)))
+#|(check-equal? (make-array 35 (NumV 0.0) (create-store 20)) 
+              (cast (vector (NumV 0.0) (NumV 0.0) (NumV 0.0)) Store))
+(check-equal? (make-array 35 (BoolV #t) (create-store 20)) 
+              (cast (vector (BoolV #t) (BoolV #t) (BoolV #t) (BoolV #t) (BoolV #t)) Store))
+;(check-equal? (make-array 2 (NullV 'null) (create-store 20)))|#
+
+
               
 ;; creates a fresh array containing the given values
 #|
