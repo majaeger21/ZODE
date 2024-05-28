@@ -143,6 +143,8 @@
     [(< size 16) (error 'create-store "ZODE: Allocated Memory Insufficient")]
     [else (vector-append top-store (cast (make-vector (- size 16) (BoolV #f)) Store))]))
 
+(check-exn #rx"ZODE: Allocated" (lambda () (create-store 10)))
+
 ;;add-env
 (define (add-env [env : Environment] [args : (Listof Value)] [params :
                                                      (Listof Symbol)] [store : Store]) : Environment
@@ -159,6 +161,8 @@
                                          (set-store store (interp new env store) (Binding-loc (first env))))]
     [else (mutate-store (rest env) store orig new)]))
 
+(check-exn #rx"ZODE: unbound" (lambda () (mutate-store top-env (create-store 35) (IdC 'x) (NumC 34))))
+
 ;;set-store
 (define (set-store [store : Store] [value : Value] [index : Integer]) : NullV
   (vector-set! store index value)
@@ -170,7 +174,8 @@
   (let ([index (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)])
     (println (~v index))
     (cond
-      [(<= (vector-length store) index) (error 'add-store "ZODE: Index out of Bounds Error, attempting to add ~e out of bounds" v)]
+      [(<= (vector-length store) index) (error 'add-store
+                "ZODE: Index out of Bounds Error, attempting to add ~e out of bounds" v)]
       [else (begin (vector-set! store index v)
            (println "This ran")
            
@@ -311,7 +316,8 @@
 ;; sets the given element to be the result of calling function
 (define (aset! [store : Store] [arr : ArrayV] [index : Integer] [new : Value]) : NullV
   (cond
-    [(or (< index 0) (>= index (ArrayV-len arr))) (error 'aset! "ZODE: Index out of Bounds Error, attempting to add ~e out of bounds" new)]
+    [(or (< index 0) (>= index (ArrayV-len arr))) (error 'aset!
+                "ZODE: Index out of Bounds Error, attempting to add ~e out of bounds" new)]
     [else (set-store store new (+ (ArrayV-loc arr) index))]))
 
 
@@ -447,7 +453,8 @@ Input: ExprC Env, Output: Value
                      (match clo
                        [(? CloV?)(cond
                          [(= (length args) (length (CloV-args clo))) (interp
-                                      (CloV-body clo) (add-env (CloV-env clo) (interp-args args env store) (CloV-args clo) store) store)]
+                                      (CloV-body clo) (add-env (CloV-env clo)
+                                                (interp-args args env store) (CloV-args clo) store) store)]
                          [else (error 'interp "ZODE: Number of Argument Mismatch, expected
                                ~e - ~e, got ~e - ~e" (length (CloV-args clo)) (CloV-args clo) (length args) args)])]
                        [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env store) store)]))]
@@ -593,7 +600,8 @@ Results:
 
 (let ([store (create-store 25)])
   ;; Test make-array with invalid size 0
-  (check-exn #rx"ZODE: Size must be greater than 0" (lambda () (apply-func 'make-array (list (NumV 0) (NumV 0.0)) store))))
+  (check-exn #rx"ZODE: Size must be greater than 0" (lambda ()
+                                 (apply-func 'make-array (list (NumV 0) (NumV 0.0)) store))))
 
 (let ([store (create-store 25)])
   ;; Test array with two string values
@@ -724,7 +732,8 @@ Results:
 
 ;interp test cases
 (check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+)
-                            (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5))) (NumC 2))) top-env (create-store 35)) (NumV 10) )
+                            (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5)))
+                                           (NumC 2))) top-env (create-store 35)) (NumV 10) )
 
 #;(check-exn #rx"ZODE: Expected CloV" (lambda () (interp (AppC (IdC '+) (list (AppC
                                              (NumC 4) (list (NumC 3) (NumC 5))) (NumC 2))) top-env)))
@@ -751,7 +760,8 @@ Results:
 (check-exn #rx"ZODE: Expected a condition" (lambda () (interp (IfC (NumC 4) (AppC (IdC '+)
                                                   (list (NumC 1) (NumC 2))) (NumC 1)) top-env (create-store 35))))
 (check-exn #rx"ZODE: No parameter" (lambda () (interp (IfC (AppC (IdC 'equal?) (list (NumC 3)
-                                     (NumC 3))) (AppC (IdC 'z) (list (NumC 1) (NumC 2))) (NumC 1)) top-env (create-store 35))))
+                                     (NumC 3))) (AppC (IdC 'z) (list (NumC 1) (NumC 2)))
+                                                (NumC 1)) top-env (create-store 35))))
 
 ;top interp tests
 (check-equal? (top-interp '{locals : x = 12 : {+ x 1}} 35) "13")
@@ -760,7 +770,8 @@ Results:
 (check-equal? (top-interp '{if : {equal? "mystring" "mystring"} :
                                {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}} 35) "#<procedure>")
 (check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : + : {lamb : y : {- y 34}}} 35) "#<primop>")
-(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : "mystring" : {lamb : y : {- y 34}}} 35) "\"mystring\"")
+(check-equal? (top-interp '{if : {equal? "mystring" "mystring"}
+                               : "mystring" : {lamb : y : {- y 34}}} 35) "\"mystring\"")
 (check-exn #rx"user-error: \"this" (lambda () (top-interp '{if : {equal? "mystring" "mystring"} :
                                                              {error "this didnt work"} : {lamb : y : {- y 34}}} 35)))
 (check-exn #rx"user-error" (lambda () (top-interp '((lamb : e : (e e)) error) 35)))
