@@ -208,6 +208,22 @@
        [else (error "ZODE: Wrong amount of args")])]
     [else (error 'apply-func "ZODE: Unknown operator, got: ~e" op)]))
 
+;; applies the given operator
+(define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
+  (match args
+    [(list (NumV a) (NumV b))
+     (cond
+       [(equal? op '+) (NumV (+ a b))]
+       [(equal? op '-) (NumV (- a b))]
+       [(equal? op '*) (NumV (* a b))]
+       [(equal? op '/) (if (not (zero? b))
+                       (NumV (/ a b))
+                       (error "ZODE: Division by zero"))]
+       [(equal? op '<=) (BoolV (<= a b))]
+       [else (error "ZODE: Unknown operator, got: ~e" op)])]
+    [(list Value) (user-error (first args))]
+    [else (error "ZODE: Invalid arguments for operation")]))
+
 ;; creates a fresh array of the given size, with all cells filled with the given value
 (define (make-array [size : Integer] [value : Value] [store : Store]) : ArrayV
   (if (<= size 0)
@@ -247,21 +263,6 @@
     [(> end (string-length str)) (error 'sub-string "ZODE: End needs to less than/equal to string length")]
     [else (substring str start end)]))
 
-;; applies the given operator
-(define (apply-op [op : Symbol] [args : (Listof Value)]) : Value
-  (match args
-    [(list (NumV a) (NumV b))
-     (cond
-       [(equal? op '+) (NumV (+ a b))]
-       [(equal? op '-) (NumV (- a b))]
-       [(equal? op '*) (NumV (* a b))]
-       [(equal? op '/) (if (not (zero? b))
-                       (NumV (/ a b))
-                       (error "ZODE: Division by zero"))]
-       [(equal? op '<=) (BoolV (<= a b))]
-       [else (error "ZODE: Unknown operator, got: ~e" op)])]
-    [(list Value) (user-error (first args))]
-    [else (error "ZODE: Invalid arguments for operation")]))
 
 ;; handles equals?
 (define (equals? [a : Any] [b : Any]) : Boolean
