@@ -232,7 +232,14 @@
               [new (third args)])
           (aset! store arr index new))]
        [else (error 'apply-func "ZODE: aset! expects 3 arguments")])]
- 
+    [(equal? op 'sub-string)
+     (cond
+       [(equal? (length args) 3)
+        (let ([str (StrV-s (cast (first args) StrV))]
+              [start (cast (NumV-n (cast (second args) NumV)) Integer)]
+              [end (cast (NumV-n (cast (third args) NumV)) Integer)])
+          (StrV (sub-string str start end)))]
+       [else (error 'apply-func "ZODE: sub-string expects 3 arguments")])]
     [else (error 'apply-func "ZODE: Unknown operator, got: ~e" op)]))
 
 
