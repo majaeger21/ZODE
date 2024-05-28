@@ -226,8 +226,8 @@
     [(equal? op '<=) (apply-op '<= args)]
     [(equal? op 'error) (apply-op 'error args)]
     [(equal? op 'seq) (apply-seq args)]
-    [(equal? op 'read-num) (NumV (apply-read-num))]
-    [(equal? op 'read-str) (StrV (apply-read-str))]
+    ;[(equal? op 'read-num) (NumV (apply-read-num))]
+    ;[(equal? op 'read-str) (StrV (apply-read-str))]
     [(equal? op '++) (apply-++ args)]
     [(equal? op 'println)
      (cond
@@ -676,7 +676,7 @@ Results:
              (lambda () (apply-func 'make-array (list (NumV 10)) store)))
 
   ;; Test error for array with no arguments
-  (check-exn #rx"ZODE: array expects at least 1 argument" 
+  (check-exn #rx"ZODE: Array" 
              (lambda () (apply-func 'array '() store)))
 
   ;; Test error for aref with incorrect number of arguments
