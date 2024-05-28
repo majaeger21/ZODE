@@ -5,7 +5,7 @@
 #|Project Status: FULLY IMPLEMENTED|#
 
 #|ZODE4 Data Types|#
-(define-type ExprC (U NumC IdC StrC IfC LambC AppC))
+(define-type ExprC (U NumC IdC StrC IfC LambC AppC MutC))
 (struct NumC ([n : Real]) #:transparent)
 (struct IdC ([s : Symbol]) #:transparent)
 (struct StrC ([s : String]) #:transparent)
@@ -86,7 +86,7 @@
        (error "ZODE: identifier cannot be a number, got: ~e" exp))
      (LambC (parse-ids (cast id (Listof Symbol))) (parse exp))]
     ; { mut : <id> : <expr>}
-    [(list 'mut ': id ': new-exp) (MutC (parse id) (parse new-exp))]
+    [(list id ':= new-exp) (MutC (IdC (cast id Symbol)) (parse new-exp))]
     ; { ‹expr› ‹expr›* }
     [(list fun args ...) (AppC (parse fun) (map parse args))]
     [(? symbol? i)
@@ -136,6 +136,55 @@
     [(contains? (first args) (rest args)) #f]
     [else (unique-args? (rest args))]))
 
+;create the store
+(define (create-store [size : Integer])
+  (cond
+    [(< size 16) (error 'create-store "ZODE: Allocated Memory Insufficient")]
+    [else (vector-append top-store (cast (make-vector (- size 16) (BoolV #f)) Store))]))
+
+
+
+;;add-env
+(define (add-env [env : Environment] [args : (Listof Value)] [params :
+                                                     (Listof Symbol)] [store : Store]) : Environment
+  (cond
+    [(empty? args) env]
+    [else (cons (let ([index (add-store (first args) store)]) (Binding (first params) index))
+                (add-env env (rest args) (rest params) store))]))
+
+;;mutate-store
+(define (mutate-store [env : Environment] [store : Store] [orig : IdC] [new : ExprC]) : NullV
+  (cond
+    [(empty? env) (error 'mutate-store "ZODE: unbound identifier: `e")]
+    [(equal? (Binding-name (first env)) (IdC-s orig)) (begin
+                                         (set-store store (interp new env store) (Binding-loc (first env))))]
+    [else (mutate-store (rest env) store orig new)]))
+
+;;set-store
+(define (set-store [store : Store] [value : Value] [index : Integer]) : NullV
+  (vector-set! store index value)
+  (NullV 'null))
+
+;;add-store
+(define (add-store [v : Value] [store : Store]) : Integer
+  
+  (let ([index (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)])
+    (cond
+      [(>= (vector-length store) index) (error 'add-store "ZODE: Index out of Bounds Error, attempting to add ~e out of bounds" v)]
+      [else (begin (vector-set! store index v)
+           (println "This ran")
+           
+           (vector-set! store 0 (NumV (+ index 1)))
+           (println (~v (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)))
+           index)])))
+
+
+;;allocate
+(define (allocate [store : Store] [values : (Listof Value)]) : Integer
+  (let ([base (add-store (first values) store)])
+    (cond
+      [(empty? (rest values)) base]
+      [else (allocate store (rest values))])))
 
 #| Top-level Env Functions  |#
 (define (apply-func [op : Symbol] [args : (Listof Value)]) : Value
@@ -161,9 +210,41 @@
     [else (error 'apply-func "ZODE: Unknown operator, got: ~e" op)]))
 
 ;; creates a fresh array of the given size, with all cells filled with the given value
+(define (make-array [size : Integer] [value : Value] [store : Store]) : Store
+  (if (<= size 0)
+      (error 'make-array "ZODE: Size must be greater than 0")
+      (let ([arr (make-vector size value)])
+        (allocate store (vector->list arr))
+        store)))
 
-
+(check-equal? (make-array 3 (NumV 0.0) (create-store 20)) 
+              (vector-append top-store (vector (NumV 0.0) (NumV 0.0) (NumV 0.0))))
+(check-equal? (make-array 5 (BoolV #t) (create-store 20)) 
+              (vector-append top-store (vector (BoolV #t) (BoolV #t) (BoolV #t) (BoolV #t) (BoolV #t))))
+(check-equal? (make-array 2 (NullV 'null) (create-store 20)))
+              
 ;; creates a fresh array containing the given values
+#|
+(define (array [values : (Listof Value)] [store : Store]) : (Mutable-Vectorof Value)
+  (let ([size (length values)]
+        [default-value (NumV 0.0)]) 
+    (if (< size 1)
+        (error 'array "ZODE: Array must contain at least one element")
+        (let ([arr (make-array size default-value store)])
+          (for ([i (in-range size)])
+            (vector-set! arr i (list-ref values i)))
+          arr))))
+
+(check-equal? (array (list (NumV 14) (BoolV #f) (NumV 5)) top-store)
+              (vector (NumV 14) (BoolV #f) (NumV 5)))
+
+(check-equal? (array (list (NumV 7) (NumV 3) (NumV 0) (NumV 9)) top-store)
+              (vector (NumV 7) (NumV 3) (NumV 0) (NumV 9)))
+
+(check-exn #rx"ZODE: Array must contain at least one element"
+            (lambda () (array '() top-store)))
+|#
+
 
 
 ;; returns the contents of given element of the array 
@@ -280,60 +361,6 @@ Input: ZODE4 Value, Output: String
 Interpreter
 Input: ExprC Env, Output: Value
 |#
-
-;create the store
-(define (create-store [size : Integer])
-  (cond
-    [(< size 16) (error 'create-store "ZODE: Allocated Memory Insufficient")]
-    [else (vector-append top-store (cast (make-vector (- size 16) (BoolV #f)) Store))]))
-
-
-
-;;add-env
-(define (add-env [env : Environment] [args : (Listof Value)] [params :
-                                                     (Listof Symbol)] [store : Store]) : Environment
-  (cond
-    [(empty? args) env]
-    [else (cons (let ([index (add-store (first args) store)]) (Binding (first params) index))
-                (add-env env (rest args) (rest params) store))]))
-
-;;mutate-store
-(define (mutate-store [env : Environment] [store : Store] [orig : IdC] [new : ExprC]) : NullV
-  (cond
-    [(empty? env) (error 'mutate-store "ZODE: unbound identifier: `e")]
-    [(equal? (Binding-name (first env)) (IdC-s orig)) (begin
-                                         (set-store store (interp new env store) (Binding-loc (first env))))]
-    [else (mutate-store (rest env) store orig new)]))
-
-;;set-store
-(define (set-store [store : Store] [value : Value] [index : Integer]) : NullV
-  (vector-set! store index value)
-  (NullV 'null))
-
-
-
-;;add-store
-(define (add-store [v : Value] [store : Store]) : Integer
-  
-  (let ([index (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)])
-    (cond
-      [(>= (vector-length store) index) (error 'add-store "ZODE: Index out of Bounds Error, attempting to add ~e out of bounds" v)]
-      [else (begin (vector-set! store index v)
-           (println "This ran")
-           
-           (vector-set! store 0 (NumV (+ index 1)))
-           (println (~v (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)))
-           index)])))
-
-
-;;allocate
-(define (allocate [store : Store] [values : (Listof Value)]) : Integer
-  (let ([base (add-store (first values) store)])
-    (cond
-      [(empty? (rest values)) base]
-      [else (allocate store (rest values))])))
-
-
 
 ;;interp-IdC
 (define (interp-id [s : Symbol] [env : Environment] [store : Store]) : Value
