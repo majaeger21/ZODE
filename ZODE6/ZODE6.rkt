@@ -22,7 +22,7 @@
 (struct PrimV ([p : Symbol]) #:transparent)
 (struct NullV ([nu : Symbol]) #:transparent)
 (struct CloV ([args : (Listof Symbol)] [body : ExprC] [env : Environment]) #:transparent)
-(struct ArrayV ([loc : Integer] [len : Integer]))
+(struct ArrayV ([loc : Integer] [len : Integer]) #:transparent)
 
 (struct Binding ([name : Symbol] [loc : Integer]) #:transparent)
 
@@ -211,44 +211,25 @@
     [else (error 'apply-func "ZODE: Unknown operator, got: ~e" op)]))
 
 ;; creates a fresh array of the given size, with all cells filled with the given value
-#;(define (make-array [size : Integer] [value : Value] [store : Store]) : Store
+(define (make-array [size : Integer] [value : Value] [store : Store]) : ArrayV
   (if (<= size 0)
       (error 'make-array "ZODE: Size must be greater than 0")
-      (let ([arr (make-vector size value)])
-        (allocate store (vector->list arr))
-        store)))
-
-#|(check-equal? (make-array 35 (NumV 0.0) (create-store 20)) 
-              (cast (vector (NumV 0.0) (NumV 0.0) (NumV 0.0)) Store))
-(check-equal? (make-array 35 (BoolV #t) (create-store 20)) 
-              (cast (vector (BoolV #t) (BoolV #t) (BoolV #t) (BoolV #t) (BoolV #t)) Store))
-;(check-equal? (make-array 2 (NullV 'null) (create-store 20)))|#
-
+      (let ([start-index (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)])
+        (for ([i (in-range size)])
+          (vector-set! store (+ start-index i) value))
+        (vector-set! store 0 (NumV (+ start-index size)))
+        (ArrayV start-index size))))
 
               
 ;; creates a fresh array containing the given values
-#|
-(define (array [values : (Listof Value)] [store : Store]) : (Mutable-Vectorof Value)
-  (let ([size (length values)]
-        [default-value (NumV 0.0)]) 
-    (if (< size 1)
-        (error 'array "ZODE: Array must contain at least one element")
-        (let ([arr (make-array size default-value store)])
-          (for ([i (in-range size)])
-            (vector-set! arr i (list-ref values i)))
-          arr))))
-
-(check-equal? (array (list (NumV 14) (BoolV #f) (NumV 5)) top-store)
-              (vector (NumV 14) (BoolV #f) (NumV 5)))
-
-(check-equal? (array (list (NumV 7) (NumV 3) (NumV 0) (NumV 9)) top-store)
-              (vector (NumV 7) (NumV 3) (NumV 0) (NumV 9)))
-
-(check-exn #rx"ZODE: Array must contain at least one element"
-            (lambda () (array '() top-store)))
-|#
-
-
+(define (array [values : (Listof Value)] [store : Store]) : ArrayV
+  (if (empty? values)
+      (error 'array "ZODE: Array must contain at least one element")
+      (let ([start-index (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)])
+        (for ([i (in-range (length values))])
+          (vector-set! store (+ start-index i) (list-ref values i)))
+        (vector-set! store 0 (NumV (+ start-index (length values))))
+        (ArrayV start-index (length values)))))
 
 ;; returns the contents of given element of the array 
 
@@ -529,6 +510,50 @@ Results:
 (check-equal? (apply-++ (list (NumV 8) (BoolV #t))) (StrV "8true"))
 (check-equal? (apply-++ (list (NumV 8) (BoolV #f))) (StrV "8false"))
 (check-equal? (apply-++ (list (PrimV '+) (BoolV #f))) (StrV "+false"))
+
+;; Test cases for make-array
+(let ([store (create-store 25)]) ;; Ensure sufficient size for operations
+  (check-equal? (make-array 3 (NumV 0.0) store) (ArrayV 16 3))
+  (check-equal? (vector-ref store 16) (NumV 0.0))
+  (check-equal? (vector-ref store 17) (NumV 0.0))
+  (check-equal? (vector-ref store 18) (NumV 0.0))
+  (check-equal? (vector-ref store 0) (NumV 19))
+  ;; New check to retrieve an element from the store and verify it matches the initialization value
+  (let ([array (make-array 3 (NumV 0.0) store)])
+    (check-equal? (vector-ref store (ArrayV-loc array)) (NumV 0.0))))
+
+(let ([store (create-store 25)]) ;; Ensure sufficient size for operations
+  (check-equal? (make-array 5 (BoolV #t) store) (ArrayV 16 5))
+  (check-equal? (vector-ref store 16) (BoolV #t))
+  (check-equal? (vector-ref store 17) (BoolV #t))
+  (check-equal? (vector-ref store 18) (BoolV #t))
+  (check-equal? (vector-ref store 19) (BoolV #t))
+  (check-equal? (vector-ref store 20) (BoolV #t))
+  (check-equal? (vector-ref store 0) (NumV 21)))
+
+(check-exn #rx"ZODE: Size must be greater than 0" (lambda () (make-array 0 (NumV 0.0) (create-store 25))))
+
+;; Test cases for array
+(let ([store (create-store 25)]) 
+  (check-equal? (array (list (NumV 3) (NumV 14) (BoolV #f) (NumV 5)) store) (ArrayV 16 4))
+  (check-equal? (vector-ref store 16) (NumV 3))
+  (check-equal? (vector-ref store 17) (NumV 14))
+  (check-equal? (vector-ref store 18) (BoolV #f))
+  (check-equal? (vector-ref store 19) (NumV 5))
+  (check-equal? (vector-ref store 0) (NumV 20)))
+
+(let ([store (create-store 25)]) 
+  (check-equal? (array (list (BoolV #t)) store) (ArrayV 16 1))
+  (check-equal? (vector-ref store 16) (BoolV #t))
+  (check-equal? (vector-ref store 0) (NumV 17)))
+
+(let ([store (create-store 25)]) 
+  (check-equal? (array (list (StrV "hello") (StrV "world")) store) (ArrayV 16 2))
+  (check-equal? (vector-ref store 16) (StrV "hello"))
+  (check-equal? (vector-ref store 17) (StrV "world"))
+  (check-equal? (vector-ref store 0) (NumV 18)))
+
+(check-exn #rx"ZODE: Array must contain at least one element" (lambda () (array '() (create-store 25))))
 
 
 
