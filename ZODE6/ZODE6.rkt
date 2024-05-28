@@ -183,6 +183,8 @@
            (println (~v (cast (NumV-n (cast (vector-ref store 0) NumV)) Integer)))
            index)])))
 
+(check-exn #rx"ZODE: Index" (lambda () (add-store (NumV 0) top-store)))
+
 
 ;;allocate
 #;(define (allocate [store : Store] [values : (Listof Value)]) : Integer
@@ -190,6 +192,7 @@
     (cond
       [(empty? (rest values)) base]
       [else (allocate store (rest values))])))
+
 
 ;;while
 '{locals : while = {lamb
@@ -596,6 +599,7 @@ Results:
   (check-equal? (vector-ref store 18) (NumV 0.0))
   (check-equal? (vector-ref store 0) (NumV 19)))
 
+
 (let ([store (create-store 25)])
   ;; Test make-array with invalid size 0
   (check-exn #rx"ZODE: Size must be greater than 0" (lambda ()
@@ -655,25 +659,6 @@ Results:
 
   ;; Test sub-string with start index greater than end index
   (check-exn #rx"ZODE: Start must be less than end" (lambda () (sub-string 16 5 3 store)))
-)
-
-(let ([store (create-store 25)])
-  ;; Store the string "hello world" at index 16
-  (vector-set! store 16 (StrV "hello world"))
-
-  ;; Test sub-string with valid range
-  (check-equal? (apply-func 'sub-string (list (NumV 16) (NumV 0) (NumV 5)) store) (StrV "hello"))
-  (check-equal? (apply-func 'sub-string (list (NumV 16) (NumV 6) (NumV 11)) store) (StrV "world"))
-  (check-equal? (apply-func 'sub-string (list (NumV 16) (NumV 3) (NumV 8)) store) (StrV "lo wo"))
-
-  ;; Test sub-string with start index out of range
-  (check-exn #rx"ZODE: Start needs to be 0 or greater" (lambda () (apply-func 'sub-string (list (NumV 16) (NumV -1) (NumV 5)) store)))
-
-  ;; Test sub-string with end index out of range
-  (check-exn #rx"ZODE: End needs to be less than/equal to string length" (lambda () (apply-func 'sub-string (list (NumV 16) (NumV 0) (NumV 12)) store)))
-
-  ;; Test sub-string with start index greater than end index
-  (check-exn #rx"ZODE: Start must be less than end" (lambda () (apply-func 'sub-string (list (NumV 16) (NumV 5) (NumV 3)) store)))
 )
 
 
