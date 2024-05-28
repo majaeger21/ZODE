@@ -677,6 +677,36 @@ Results:
 )
 
 
+(let ([store (create-store 25)])
+  ;; Test error for println with incorrect number of arguments
+  (check-exn #rx"ZODE: Expected 1 String, got more args" 
+             (lambda () (apply-func 'println (list (StrV "Hello") (StrV "World")) store)))
+
+  ;; Test error for equal? with incorrect number of arguments
+  (check-exn #rx"ZODE: Wrong amount of args" 
+             (lambda () (apply-func 'equal? (list (NumV 1) (NumV 2) (NumV 3)) store)))
+
+  ;; Test error for make-array with incorrect number of arguments
+  (check-exn #rx"ZODE: make-array expects 2 arguments" 
+             (lambda () (apply-func 'make-array (list (NumV 10)) store)))
+
+  ;; Test error for array with no arguments
+  (check-exn #rx"ZODE: array expects at least 1 argument" 
+             (lambda () (apply-func 'array '() store)))
+
+  ;; Test error for aref with incorrect number of arguments
+  (check-exn #rx"ZODE: aref expects 2 arguments" 
+             (lambda () (apply-func 'aref (list (ArrayV 0 10)) store)))
+
+  ;; Test error for aset! with incorrect number of arguments
+  (check-exn #rx"ZODE: aset! expects 3 arguments" 
+             (lambda () (apply-func 'aset! (list (ArrayV 0 10) (NumV 0)) store)))
+
+  ;; Test error for sub-string with incorrect number of arguments
+  (check-exn #rx"ZODE: sub-string expects 3 arguments" 
+             (lambda () (apply-func 'sub-string (list (NumV 0) (NumV 0)) store))))
+
+
 ;; Test cases for make-array
 (let ([store (create-store 25)]) ;; Ensure sufficient size for operations
   (check-equal? (make-array 3 (NumV 0.0) store) (ArrayV 16 3))
