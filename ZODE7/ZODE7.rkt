@@ -39,10 +39,46 @@
                  (Binding 'equal? (PrimV 'equal?))
                  (Binding 'error (PrimV 'error))))
 
-#| Parses an Expression
-   Input: Sexp, Output: ExprC
-|#
+#| Type Language|#
+(define-type Type (U StrT BoolT NumT FunT))
+(struct StrT () #:transparent)
+(struct BoolT () #:transparent)
+(struct NumT () #:transparent)
+(struct FunT ([params : (Listof Type)] [return : Type]) #:transparent)
 
+(struct TypeBinding ([name : Symbol] [type : Type]))
+(define-type TypeEnvironment (Listof TypeBinding))
+
+(define type-env : TypeEnvironment (list
+                   (TypeBinding 'num (NumT))
+                   (TypeBinding 'bool (BoolT))
+                   (TypeBinding 'str (StrT))))
+
+;; type checker 
+(define (type-check [e : ExprC] [env : TypeEnvironment]) : Type
+  (match e
+    [(NumC n) (NumT)]
+    [(StrC s) (StrT)]
+    [(IdC i) (lookup-id i env)]
+    [(IfC cond then else) (cond
+                            [(not (equal? (type-check cond env) (BoolT))) (error 'type-check "ZODE: Condition not of Boolean Type, instead got")]
+                            [else (StrT)])]
+    [other (error "ZODE: Type checking not implemented for expression: ~e" other)]))
+
+(define (lookup-id [id : Symbol] [env : TypeEnvironment]) : Type
+   (cond
+     [(empty? env) (error 'type-check "ZODE: No parameter matching id: ~e" id)]
+     [(equal? id (TypeBinding-name (first env))) (TypeBinding-type (first env))]
+     [else (lookup-id id (rest env))]))
+
+(check-equal? (type-check (NumC 5) type-env) (NumT))
+(check-equal? (type-check (StrC "hello") type-env) (StrT))
+
+
+#|
+Parses an Expression
+Input: Sexp, Output: ExprC
+|#
 (define (parse [exp : Sexp]) : ExprC
   (match exp
     ;; <num>
@@ -68,6 +104,16 @@
        [else (IdC i)])]
     [other (error 'parse "ZODE: expected valid expression, got: ~e" other)]))
 
+;; parser for the language of types 
+(define (parse-type [exp : Sexp]) : Type
+  (match exp
+    ['num (NumT)]
+    ['str (StrT)]
+    ['bool (BoolT)]
+    [(list params ... '-> return) (FunT (map parse-type (cast params (Listof Sexp))) (parse-type return))]
+    [other (error "ZODE: invalid type expression")]))
+
+;; parser for ids 
 (define (parse-ids [lst : (Listof Symbol)]) : (Listof Symbol)
   (cond 
     [(empty? lst) '()]
@@ -76,6 +122,7 @@
             [(not (unique-args? lst)) (error "ZODE: duplicate identifier found: ~e" lst)]
             [else (cons (first lst) (parse-ids (rest lst)))])]))
 
+;; parser for clauses 
 (define (parse-clauses [exp : Sexp]) : (List (Listof Symbol) (Listof ExprC))
   (match exp
     [(list (? is-valid-identifier? id) '= exp) (list (list id) (list (parse exp)))]
@@ -163,9 +210,6 @@ Input: ZODE4 Value, Output: String
 
 (define (user-error [v : Value]) : Nothing
   (error 'user-error (serialize v)))
-
-;your code failed a test: (top-interp (quote (if : true : "one" : "two"))) evaluated to "one", expecting "\"one\""
-;Saving submission with errors.
 
 #|
 Interpreter
@@ -259,6 +303,13 @@ Input: ExprC Env, Output: Value
 (check-exn #rx"ZODE: invalid identifier" (lambda () (parse '{{lamb : x locals : {+ x 1}} 12})))
 (check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse '{})))
 (check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse-clauses '{})))
+
+;;Parse-type
+(check-equal? (parse-type 'num) (NumT))
+(check-equal? (parse-type 'str) (StrT))
+(check-equal? (parse-type 'bool) (BoolT))
+(check-equal? (parse-type '(num -> num)) (FunT (list (NumT)) (NumT)))
+(check-exn #rx"ZODE: invalid type expression" (lambda () (parse-type 'invalid-type)))
 
 ;;Top-level Env Functions
 (check-equal? (apply-func '+ (list (NumV 5) (NumV 3))) (NumV 8))
