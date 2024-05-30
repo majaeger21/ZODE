@@ -54,6 +54,11 @@
                    (TypeBinding 'bool (BoolT))
                    (TypeBinding 'str (StrT))))
 
+;;args-type-check
+;; takes in a list of arguments and returns a list of Types in the same order that they appear
+(define (args-type-check [params : (Listof Type)] [args : (Listof Type)]) : Boolean
+  #f)
+
 ;; type checker 
 (define (type-check [e : ExprC] [env : TypeEnvironment]) : Type
   (match e
@@ -70,6 +75,15 @@
          [(not (equal? then-type else-type))
           (error 'type-check "ZODE: Then and Else do not have matching types, return type ambiguous with types ~e and ~e" then-type else-type)]
          [else then-type]))]
+    [(AppC lamb args) (let ([lamb-type (let ([uk-type (type-check lamb env)])
+                                         (cond
+                                           [(FunT? uk-type) (cast uk-type FunT)]
+                                           [else (error 'type-check "ZODE: Expected a Lambda, got ~e" uk-type)]))]
+                            [args-type (map (lambda ([arg : ExprC]) (type-check arg env)) args)])
+                        (cond
+                          [(not (equal? (length (FunT-params lamb-type)) (length args-type))) (error 'type-check "ZODE: Number of Argument Mismatch")]
+                          [(args-type-check (FunT-params lamb-type) args-type) (FunT-return lamb-type)]
+                          [else (error 'type-check "ZODE: Param-Argument Type Mismatch, expected ~e, got ~e") (FunT-params lamb-type) args-type]))]
     [other (error "ZODE: Type checking not implemented for expression: ~e" other)]))
 
 
