@@ -9,7 +9,7 @@
 (struct NumC ([n : Real]) #:transparent)
 (struct IdC ([s : Symbol]) #:transparent)
 (struct StrC ([s : String]) #:transparent)
-(struct IfC ([cond : ExprC] [then : ExprC] [else : ExprC]) #:transparent)
+(struct IfC ([cond : ExprC] [then : ExprC] [els : ExprC]) #:transparent)
 (struct LambC ([id : (Listof Symbol)] [exp : ExprC]) #:transparent)
 (struct AppC ([fun : ExprC] [args : (Listof ExprC)]) #:transparent)
 
@@ -60,10 +60,18 @@
     [(NumC n) (NumT)]
     [(StrC s) (StrT)]
     [(IdC i) (lookup-id i env)]
-    [(IfC cond then else) (cond
-                            [(not (equal? (type-check cond env) (BoolT))) (error 'type-check "ZODE: Condition not of Boolean Type, instead got")]
-                            [else (StrT)])]
+    [(IfC cnd then els)
+     (let ([cond-type (type-check cnd env)]
+           [then-type (type-check then env)]
+           [else-type (type-check els env)])
+       (cond
+         [(not (equal? cond-type (BoolT)))
+          (error 'type-check "ZODE: Condition not of Boolean Type, instead got ~e" cond-type)]
+         [(not (equal? then-type else-type))
+          (error 'type-check "ZODE: Then and Else do not have matching types, return type ambiguous with types ~e and ~e" then-type else-type)]
+         [else then-type]))]
     [other (error "ZODE: Type checking not implemented for expression: ~e" other)]))
+
 
 (define (lookup-id [id : Symbol] [env : TypeEnvironment]) : Type
    (cond
