@@ -57,7 +57,10 @@
 ;;args-type-check
 ;; takes in a list of arguments and returns a list of Types in the same order that they appear
 (define (args-type-check [params : (Listof Type)] [args : (Listof Type)]) : Boolean
-  #f)
+  (cond
+    [(empty? params) #t]
+    [(equal? (first params) (first args)) (args-type-check (rest params) (rest args))]
+    [else #f]))
 
 ;; type checker 
 (define (type-check [e : ExprC] [env : TypeEnvironment]) : Type
