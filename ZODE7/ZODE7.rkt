@@ -10,7 +10,7 @@
 (struct IdC ([s : Symbol]) #:transparent)
 (struct StrC ([s : String]) #:transparent)
 (struct IfC ([cond : ExprC] [then : ExprC] [els : ExprC]) #:transparent)
-(struct LambC ([id : (Listof Symbol)] [exp : ExprC] [return : Type]) #:transparent)
+(struct LambC ([id : (Listof Symbol)] [id-types : (Listof Type)] [exp : ExprC] [return : (Option Type)]) #:transparent)
 (struct AppC ([fun : ExprC] [args : (Listof ExprC)]) #:transparent)
 
 #|Values|#
@@ -194,6 +194,8 @@ Input: Sexp, Output: ExprC
     [(contains? (first args) (rest args)) #f]
     [else (unique-args? (rest args))]))
 
+(check-equal? (parse '{lamb : [num n] -> num : {+ n 1}}) (LambC (list 'n) (list (NumT)) (AppC (IdC '+) (list (IdC 'n) (NumC 1))) (NumT)))
+(check-equal? (parse '{locals : num a = 3 : num b = 4 : {* a b}}) (AppC (LambC (list 'a 'b) (list (NumT) (NumT)) (AppC (IdC '*) (list (IdC 'a) (IdC 'b))) #f)))
 
 #|Top-level Env Functions|#
 (define (apply-func [op : Symbol] [args : (Listof Value)]) : Value
