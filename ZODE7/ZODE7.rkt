@@ -49,10 +49,22 @@
 (struct TypeBinding ([name : Symbol] [type : Type]))
 (define-type TypeEnvironment (Listof TypeBinding))
 
-(define type-env : TypeEnvironment (list
+(define base-tenv : TypeEnvironment (list
                    (TypeBinding 'num (NumT))
                    (TypeBinding 'bool (BoolT))
-                   (TypeBinding 'str (StrT))))
+                   (TypeBinding 'str (StrT))
+                   (TypeBinding '+ (FunT (list (NumT) (NumT)) (NumT)))
+                   (TypeBinding '- (FunT (list (NumT) (NumT)) (NumT)))
+                   (TypeBinding '* (FunT (list (NumT) (NumT)) (NumT)))
+                   (TypeBinding '/ (FunT (list (NumT) (NumT)) (NumT)))
+                   (TypeBinding 'false (BoolT))
+                   (TypeBinding 'true (BoolT))))
+
+(define (lookup-id [id : Symbol] [env : TypeEnvironment]) : Type
+   (cond
+     [(empty? env) (error 'type-check "ZODE: No parameter matching id: ~e" id)]
+     [(equal? id (TypeBinding-name (first env))) (TypeBinding-type (first env))]
+     [else (lookup-id id (rest env))]))
 
 ;;args-type-check
 ;; takes in a list of arguments and returns a list of Types in the same order that they appear
@@ -86,18 +98,21 @@
                         (cond
                           [(not (equal? (length (FunT-params lamb-type)) (length args-type))) (error 'type-check "ZODE: Number of Argument Mismatch")]
                           [(args-type-check (FunT-params lamb-type) args-type) (FunT-return lamb-type)]
-                          [else (error 'type-check "ZODE: Param-Argument Type Mismatch, expected ~e, got ~e") (FunT-params lamb-type) args-type]))]
+                          [else (error 'type-check "ZODE: Param-Argument Type Mismatch, expected ~e, got ~e" (FunT-params lamb-type) args-type)]))]
+    ;[(LambC ids exp) (FunT (map (lambda (id) (lookup-id id env)) ids) (type-check exp))] ;;consider, returns types are specified?
     [other (error "ZODE: Type checking not implemented for expression: ~e" other)]))
 
+(check-equal? (type-check (IfC (IdC 'false) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv) (NumT))
+(check-exn #rx"ZODE: Condition" (lambda () (type-check (IfC (IdC '+) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv)))
+(check-exn #rx"ZODE: Then" (lambda () (type-check (IfC (IdC 'true) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (StrC "String")) base-tenv)))
+(check-exn #rx"ZODE: Expected a Lambda" (lambda () (type-check (IfC (IdC '+) (AppC (IdC 'false) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv)))
+(check-exn #rx"ZODE: Param-Argument" (lambda () (type-check (IfC (IdC '+) (AppC (IdC '+) (list (StrC "string") (NumC 3))) (NumC 4)) base-tenv)))
 
-(define (lookup-id [id : Symbol] [env : TypeEnvironment]) : Type
-   (cond
-     [(empty? env) (error 'type-check "ZODE: No parameter matching id: ~e" id)]
-     [(equal? id (TypeBinding-name (first env))) (TypeBinding-type (first env))]
-     [else (lookup-id id (rest env))]))
 
-(check-equal? (type-check (NumC 5) type-env) (NumT))
-(check-equal? (type-check (StrC "hello") type-env) (StrT))
+
+
+(check-equal? (type-check (NumC 5) base-tenv) (NumT))
+(check-equal? (type-check (StrC "hello") base-tenv) (StrT))
 
 
 #|
