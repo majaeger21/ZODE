@@ -371,7 +371,7 @@ Input: ExprC Env, Output: Value
 (check-equal? (apply-func 'equal? (list (BoolV #t) (BoolV #f))) (BoolV #f))
 (check-exn #rx"ZODE: Wrong amount of args" (lambda () (apply-func 'equal? (list (NumV 5)
                                                                                  (NumV 6) (NumV 3)))))
-
+(check-exn #rx"ZODE: No parameter matching id: " (lambda () (lookup-id 'hi '())))
 
 ;interp test cases
 (check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+)
