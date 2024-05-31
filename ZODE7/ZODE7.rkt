@@ -10,7 +10,7 @@
 (struct IdC ([s : Symbol]) #:transparent)
 (struct StrC ([s : String]) #:transparent)
 (struct IfC ([cond : ExprC] [then : ExprC] [els : ExprC]) #:transparent)
-(struct LambC ([id : (Listof Symbol)] [exp : ExprC]) #:transparent)
+(struct LambC ([id : (Listof Symbol)] [exp : ExprC] [return : Type]) #:transparent)
 (struct AppC ([fun : ExprC] [args : (Listof ExprC)]) #:transparent)
 
 #|Values|#
@@ -305,7 +305,7 @@ Input: ExprC Env, Output: Value
                                ~e, got ~e" (length (CloV-args clo)) (length args))])]
                        [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env))]))]
     
-    [(LambC params expr) (CloV params expr env)]
+    [(LambC params expr return) (CloV params expr env)]
     [(IdC s) (interp-id s env)]))
 
 ;;top-interp
