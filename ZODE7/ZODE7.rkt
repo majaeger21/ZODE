@@ -128,13 +128,17 @@ Input: Sexp, Output: ExprC
     ;; { if : ‹expr› : ‹expr› : ‹expr› }
     [(list 'if ': cond ': then ': else) (IfC (parse cond) (parse then) (parse else))]
     ;; { locals : ‹clauses› : ‹expr› }
-    [(list 'locals ': cls ... ': exp) (let ([clauses (parse-clauses (cast cls (Listof Sexp)))])
-                                        (AppC (LambC (first clauses) (parse exp)) (second clauses)))]
-    ;; { lamb : ‹id›* : ‹expr› }
-    [(list 'lamb ': id ... ': exp)  
-     (unless (andmap symbol? id)  
-       (error "ZODE: identifier cannot be a number, got: ~e" exp))
-     (LambC (parse-ids (cast id (Listof Symbol))) (parse exp))]
+    [(list 'locals ': cls ... ': exp) 
+     (let ([clauses (parse-clauses (cast cls (Listof Sexp)))])
+       (AppC (LambC (first clauses) (list) (parse exp) #f) (second clauses)))]
+    ;; { lamb : [‹ty› ‹id›]* -> ‹ty› : ‹expr› }
+    [(list 'lamb ': params '-> ret ': body)
+     (unless (andmap (lambda (x) (and (list? x) (= (length x) 2))) (cast params (Listof Any)))
+       (error "ZODE: Invalid lambda parameter list, got: ~e" params))
+     (let ([ids (map (lambda (x) (first (cast x (List Any))))) (cast params (Listof (List Any Any)))]
+           [id-types (map (lambda (x) (parse-type (second (cast x (List Any)))))) (cast params (Listof (List Any Any)))]
+           [return-type (Some (parse-type ret))])
+       (LambC (cast ids (Listof Symbol)) (cast id-types (Listof Type)) (parse body) (cast return-type (Option Type))))]
     ;; { ‹expr› ‹expr›* }
     [(list fun args ...) (AppC (parse fun) (map parse args))]
     ;; <id>
@@ -306,8 +310,7 @@ Input: ExprC Env, Output: Value
                          [else (error 'interp "ZODE: Number of Argument Mismatch, expected
                                ~e, got ~e" (length (CloV-args clo)) (length args))])]
                        [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env))]))]
-    
-    [(LambC params expr return) (CloV params expr env)]
+    [(LambC params param-types expr return) (CloV params expr env)]
     [(IdC s) (interp-id s env)]))
 
 ;;top-interp
