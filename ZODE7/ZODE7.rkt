@@ -109,75 +109,6 @@
 (check-exn #rx"ZODE: Param-Argument" (lambda () (type-check (IfC (IdC '+) (AppC (IdC '+) (list (StrC "string") (NumC 3))) (NumC 4)) base-tenv)))
 
 
-
-
-(check-equal? (type-check (NumC 5) base-tenv) (NumT))
-(check-equal? (type-check (StrC "hello") base-tenv) (StrT))
-
-
-#|
-Parses an Expression
-Input: Sexp, Output: ExprC
-|#
-(define (parse [exp : Sexp]) : ExprC
-  (match exp
-    ;; <num>
-    [(? real? n) (NumC n)]
-    ;; <string>
-    [(? string? s) (StrC s)]
-    ;; { if : ‹expr› : ‹expr› : ‹expr› }
-    [(list 'if ': cond ': then ': else) (IfC (parse cond) (parse then) (parse else))]
-    ;; { locals : ‹clauses› : ‹expr› }
-    [(list 'locals ': cls ... ': exp) 
-     (let ([clauses (parse-clauses (cast cls (Listof Sexp)))])
-       (AppC (LambC (first clauses) (list) (parse exp) #f) (second clauses)))]
-    ;; { lamb : [‹ty› ‹id›]* -> ‹ty› : ‹expr› }
-    [(list 'lamb ': params '-> ret ': body)
-     (unless (andmap (lambda (x) (and (list? x) (= (length x) 2))) (cast params (Listof Any)))
-       (error "ZODE: Invalid lambda parameter list, got: ~e" params))
-     (let ([ids (map (lambda (x) (first (cast x (List Any))))) (cast params (Listof (List Any Any)))]
-           [id-types (map (lambda (x) (parse-type (second (cast x (List Any)))))) (cast params (Listof (List Any Any)))]
-           [return-type (Some (parse-type ret))])
-       (LambC (cast ids (Listof Symbol)) (cast id-types (Listof Type)) (parse body) (cast return-type (Option Type))))]
-    ;; { ‹expr› ‹expr›* }
-    [(list fun args ...) (AppC (parse fun) (map parse args))]
-    ;; <id>
-    [(? symbol? i)
-     (cond
-       [(not-valid-identifier? i) (error "ZODE: invalid identifier, got: ~e" i)]
-       [else (IdC i)])]
-    [other (error 'parse "ZODE: expected valid expression, got: ~e" other)]))
-
-;; parser for the language of types 
-(define (parse-type [exp : Sexp]) : Type
-  (match exp
-    ['num (NumT)]
-    ['str (StrT)]
-    ['bool (BoolT)]
-    [(list params ... '-> return) (FunT (map parse-type (cast params (Listof Sexp))) (parse-type return))]
-    [other (error "ZODE: invalid type expression")]))
-
-;; parser for ids 
-(define (parse-ids [lst : (Listof Symbol)]) : (Listof Symbol)
-  (cond 
-    [(empty? lst) '()]
-    [else (cond
-            [(not-valid-identifier? (first lst)) (error "ZODE: invalid identifier, got: ~e" (first lst))]
-            [(not (unique-args? lst)) (error "ZODE: duplicate identifier found: ~e" lst)]
-            [else (cons (first lst) (parse-ids (rest lst)))])]))
-
-;; parser for clauses 
-(define (parse-clauses [exp : Sexp]) : (List (Listof Symbol) (Listof ExprC))
-  (match exp
-    [(list (? is-valid-identifier? id) '= exp) (list (list id) (list (parse exp)))]
-    [(list (? is-valid-identifier? id) '= exp ': cls ...)
-     (let ([res (parse-clauses cls)])
-       (if (unique-args? (cons id (first res)))
-           (list (cons id (first res)) (cons (parse exp) (second res)))
-           (error "ZODE: duplicate identifier found: ~e" id)))]
-    [other
-     (error 'parse-clauses "ZODE: expected valid expression, got: ~e" other)]))
-
 (define (not-valid-identifier? id)
   (member id '(if lamb locals : =)))
 
@@ -198,8 +129,105 @@ Input: Sexp, Output: ExprC
     [(contains? (first args) (rest args)) #f]
     [else (unique-args? (rest args))]))
 
+(check-equal? (type-check (NumC 5) base-tenv) (NumT))
+(check-equal? (type-check (StrC "hello") base-tenv) (StrT))
+;; parser for the language of types 
+(define (parse-type [exp : Sexp]) : Type
+  (match exp
+    ['num (NumT)]
+    ['str (StrT)]
+    ['bool (BoolT)]
+    [(list params ... '-> return) (FunT (map parse-type (cast params (Listof Sexp))) (parse-type return))]
+    [other (error "ZODE: invalid type expression")]))
+
+
+(struct Params-Struct ([syms : (Listof Symbol)] [types : (Listof Type)]) #:transparent)
+;;parse params
+(define (parse-params [params : (Listof Sexp)]) : Params-Struct
+  (match (first params)
+    [(list type (? is-valid-identifier? sym)) (cond
+                       [(empty? (rest params)) (Params-Struct
+                             (cons (cast sym Symbol) '())
+                             (cons (parse-type type) '()))]
+                       [else (begin (println (~v (rest params))) (println (~v params))(let ([result (parse-params (rest params))])
+                            (Params-Struct
+                             (cons (cast sym Symbol) (Params-Struct-syms result))
+                             (cons (parse-type type) (Params-Struct-types result)))))])]
+    [other (error "ZODE: Not valid parameter formatting")]))
+
+
+(check-equal? (parse-params (list '[num x] '[num y] '[num z])) (Params-Struct (list 'x 'y 'z) (list (NumT) (NumT) (NumT))))
+(check-equal? (parse-params (list '[num x] '[num y])) (Params-Struct (list 'x 'y) (list (NumT) (NumT))))
+
+#|
+Parses an Expression
+Input: Sexp, Output: ExprC
+|#
+(define (parse [exp : Sexp]) : ExprC
+  (match exp
+    ;; <num>
+    [(? real? n) (NumC n)]
+    ;; <string>
+    [(? string? s) (StrC s)]
+    ;; { if : ‹expr› : ‹expr› : ‹expr› }
+    [(list 'if ': cond ': then ': else) (IfC (parse cond) (parse then) (parse else))]
+    ;; { locals : ‹clauses› : ‹expr› }
+    [(list 'locals ': cls ... ': exp) 
+     (let ([clauses (parse-clauses (cast cls (Listof Sexp)))])
+       (AppC (LambC (cond
+                      [(unique-args? (begin (println (~v (Params-Struct-syms (first clauses))))(Params-Struct-syms (first clauses)))) (Params-Struct-syms (first clauses))]
+                      [else (error 'parse "ZODE: duplicate identifier found")]) (Params-Struct-types (first clauses)) (parse exp) #f) (second clauses)))]
+    ;; { lamb : [‹ty› ‹id›]* -> ‹ty› : ‹expr› }
+    #;[(list 'lamb ': params ... '-> ret ': body)
+     (unless (andmap (lambda (x) (and (list? x) (= (length x) 2))) (cast params (Listof Any)))
+       (error "ZODE: Invalid lambda parameter list, got: ~e" params))
+     (let ([ids (map (lambda (x) (first (cast x (List Any))))) (cast params (Listof (List Any Any)))]
+           [id-types (map (lambda (x) (parse-type (second (cast x (List Any)))))) (cast params (Listof (List Any Any)))]
+           [return-type (Some (parse-type ret))])
+       (LambC (cast ids (Listof Symbol)) (cast id-types (Listof Type)) (parse body) (cast return-type (Option Type))))]
+    [(list 'lamb ': params ... '-> return ': body) (let ([parsed-params (parse-params (cast params (Listof Sexp)))]
+                                                           [return-type (parse-type return)])
+                                                     (LambC (cond
+                                                              [(unique-args? (Params-Struct-syms parsed-params)) (Params-Struct-syms parsed-params)]
+                                                              [else (error 'parse "ZODE: duplicate identifier found")])
+                                                            (Params-Struct-types parsed-params) (parse body) return-type))]
+    ;; { ‹expr› ‹expr›* }
+    [(list fun args ...) (AppC (parse fun) (map parse args))]
+    ;; <id>
+    [(? symbol? i)
+     (cond
+       [(not-valid-identifier? i) (error "ZODE: invalid identifier, got: ~e" i)]
+       [else (IdC i)])]
+    [other (error 'parse "ZODE: expected valid expression, got: ~e" other)]))
+
+
+
+
+
+;; parser for ids 
+(define (parse-ids [lst : (Listof Symbol)]) : (Listof Symbol)
+  (cond 
+    [(empty? lst) '()]
+    [else (cond
+            [(not-valid-identifier? (first lst)) (error "ZODE: invalid identifier, got: ~e" (first lst))]
+            [(not (unique-args? lst)) (error "ZODE: duplicate identifier found: ~e" lst)]
+            [else (cons (first lst) (parse-ids (rest lst)))])]))
+
+;; parser for clauses 
+(define (parse-clauses [exp : Sexp]) : (List Params-Struct (Listof ExprC))
+  (match exp
+    [(list type (? is-valid-identifier? id) '= exp) (list (Params-Struct (list (cast id Symbol)) (list (parse-type type))) (list (parse exp)))]
+    [(list type (? is-valid-identifier? id) '= exp ': cls ...)
+     (let ([res (parse-clauses cls)])
+       (if (unique-args? (cons id (Params-Struct-syms (first res))))
+           (list (Params-Struct (cons id (Params-Struct-syms (first res))) (cons (parse-type type) (Params-Struct-types (first res)))) (cons (parse exp) (second res)))
+           (error "ZODE: duplicate identifier found: ~e" id)))]
+    [other
+     (error 'parse-clauses "ZODE: expected valid expression, got: ~e" other)]))
+
+
 (check-equal? (parse '{lamb : [num n] -> num : {+ n 1}}) (LambC (list 'n) (list (NumT)) (AppC (IdC '+) (list (IdC 'n) (NumC 1))) (NumT)))
-(check-equal? (parse '{locals : num a = 3 : num b = 4 : {* a b}}) (AppC (LambC (list 'a 'b) (list (NumT) (NumT)) (AppC (IdC '*) (list (IdC 'a) (IdC 'b))) #f)))
+(check-equal? (parse '{locals : num a = 3 : num b = 4 : {* a b}}) (AppC (LambC (list 'a 'b) (list (NumT) (NumT)) (AppC (IdC '*) (list (IdC 'a) (IdC 'b))) #f) (list (NumC 3) (NumC 4))))
 
 #|Top-level Env Functions|#
 (define (apply-func [op : Symbol] [args : (Listof Value)]) : Value
@@ -323,13 +351,13 @@ Input: ExprC Env, Output: Value
 (check-equal? (parse 5) (NumC 5))
 (check-equal? (parse 'g) (IdC 'g))
 (check-equal? (parse 'x) (IdC 'x))
-(check-exn #rx"ZODE: duplicate identifier found: " (lambda () (parse '{lamb : x x : 3})))
-(check-exn #rx"ZODE: identifier cannot be a number, got: " (lambda () (parse '{lamb : 3 5 4 : 6})))
+(check-exn #rx"ZODE: duplicate identifier" (lambda () (parse '{lamb : [num x] [num x] -> num : 3})))
+(check-exn #rx"ZODE: Not valid parameter" (lambda () (parse '{lamb : [num 3] [num 5] [num 4] -> num : 6})))
 (check-equal? (parse "hello") (StrC "hello"))
 (check-equal? (parse '{if : 3 : 4 : 5}) (IfC (NumC 3) (NumC 4) (NumC 5)))
-(check-equal? (parse-clauses '{x = 12}) (list (list 'x) (list (NumC 12))))
-(check-equal? (parse-clauses '{x = 12 : y = 3}) (list (list 'x 'y) (list (NumC 12) (NumC 3))))
-(check-equal? (parse '{locals : x = 12 : {+ x 1}}) (AppC (LambC (list 'x) (AppC (IdC '+)
+(check-equal? (parse-clauses '{num x = 12}) (list (Params-Struct(list 'x) (list (NumT))) (list (NumC 12))))
+(check-equal? (parse-clauses '{num x = 12 : num y = 3}) (list (Params-Struct (list 'x 'y) (list (NumT) (NumT))) (list (NumC 12) (NumC 3))))
+#|(check-equal? (parse '{locals : x = 12 : {+ x 1}}) (AppC (LambC (list 'x) (AppC (IdC '+)
                                                                                 (list (IdC 'x)
                                                                                       (NumC 1))))
                                                          (list (NumC 12))))
@@ -341,7 +369,9 @@ Input: ExprC Env, Output: Value
                                                                          (list (IdC 'x)
                                                                                (NumC 1))))
                                                   (list (NumC 12))))
-(check-exn #rx"ZODE: duplicate identifier found: " (lambda () (parse '(locals : z = (lamb : : 3) : z = 9 : (z)))))
+
+|#
+(check-exn #rx"ZODE: duplicate identifier" (lambda () (parse '(locals : {-> num} z = (lamb : : 3) : num z = 9 : (z)))))
 
 
 (check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{if : 3 : 4 : 'locals})))
@@ -377,13 +407,13 @@ Input: ExprC Env, Output: Value
 (check-exn #rx"ZODE: No parameter matching id: " (lambda () (lookup-id 'hi '())))
 
 ;interp test cases
-(check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (AppC (IdC '+)
-                            (list (IdC 'x) (IdC 'y)))) (list (NumC 3) (NumC 5))) (NumC 2))) top-env) (NumV 10))
+(check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (list (NumT) (NumT)) (AppC (IdC '+)
+                            (list (IdC 'x) (IdC 'y))) (NumT)) (list (NumC 3) (NumC 5))) (NumC 2))) top-env) (NumV 10))
 
 (check-exn #rx"ZODE: Expected CloV" (lambda () (interp (AppC (IdC '+) (list (AppC
                                              (NumC 4) (list (NumC 3) (NumC 5))) (NumC 2))) top-env)))
 (check-exn #rx"ZODE: Number of Argument" (lambda () (interp (AppC (IdC '+) (list (AppC
-       (LambC (list 'x 'y) (AppC (IdC '+) (list (IdC 'x) (IdC 'y))))
+       (LambC (list 'x 'y) (list (NumT) (NumT)) (AppC (IdC '+) (list (IdC 'x) (IdC 'y))) (NumT))
        (list (NumC 3) (NumC 5) (NumC 5))) (NumC 2))) top-env)))
 
 
@@ -407,9 +437,9 @@ Input: ExprC Env, Output: Value
                                      (NumC 3))) (AppC (IdC 'z) (list (NumC 1) (NumC 2))) (NumC 1)) top-env)))
 
 ;top interp tests
-(check-equal? (top-interp '{locals : x = 12 : {+ x 1}}) "13")
-(check-equal? (top-interp '{locals : x = false : x}) "false")
-(check-equal? (top-interp '{locals : x = true : x}) "true")
+(check-equal? (top-interp '{locals : num x = 12 : {+ x 1}}) "13")
+(check-equal? (top-interp '{locals : bool x = false : x}) "false")
+(check-equal? (top-interp '{locals : bool x = true : x}) "true")
 (check-equal? (top-interp '{if : {equal? "mystring" "mystring"} :
                                {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
 (check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : + : {lamb : y : {- y 34}}}) "#<primop>")
