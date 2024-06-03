@@ -412,6 +412,32 @@ Input: ExprC Env, Output: Value
     (list (NumT))
     (NumC 42)
     (NumT)))))
+
+(check-equal?
+ (parse '{local-rec : square-helper = {lamb : [num n] -> num
+                                        : {if : {<= n 0}
+                                              : 0
+                                              : {+ n {square-helper {- n 2}}}}}
+           : square-helper})
+ (AppC
+  (LambC
+   (list 'square-helper)
+   (list (FunT (list (NumT)) (NumT)))
+   (IdC 'square-helper)
+   #f)
+  (list
+   (LambC
+    (list 'n)
+    (list (NumT))
+    (IfC (AppC (IdC '<=)
+               (list (IdC 'n) (NumC 0)))
+         (NumC 0)
+         (AppC (IdC '+)
+               (list (IdC 'n)
+                     (AppC (IdC 'square-helper)
+                           (list (AppC (IdC '-) (list (IdC 'n) (NumC 2))))))))
+    (NumT)))))
+
 (check-equal?
  (parse '{locals : {num -> num} square = {lamb : [num n] -> num
                                            : {square-helper {- {* 2 n} 1}}}
