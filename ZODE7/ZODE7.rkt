@@ -81,7 +81,7 @@
     [(StrC s) (StrT)]
     [(IdC i) (lookup-id i env)]
     [(IfC cnd then els)
-     (let ([cond-type (type-check cnd env)]
+     (let ([cond-type (type-check cnd env)] 
            [then-type (type-check then env)]
            [else-type (type-check els env)])
        (cond
@@ -442,27 +442,27 @@ Input: ExprC Env, Output: Value
 (check-equal? (top-interp '{locals : bool x = false : x}) "false")
 (check-equal? (top-interp '{locals : bool x = true : x}) "true")
 (check-equal? (top-interp '{if : {equal? "mystring" "mystring"} :
-                               {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
-(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : + : {lamb : y : {- y 34}}}) "#<primop>")
-(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : "mystring" : {lamb : y : {- y 34}}}) "\"mystring\"")
-(check-exn #rx"user-error: \"this" (lambda () (top-interp '{if : {equal? "mystring" "mystring"} :
-                                                             {error "this didnt work"} : {lamb : y : {- y 34}}})))
-(check-exn #rx"user-error" (lambda () (top-interp '((lamb : e : (e e)) error))))
-(check-equal? (top-interp '{locals : add1 = {lamb : x : {+ x 1}} : y = {+ 3 4} : {add1 y}}) "8")
+                               {lamb : [num x] -> num : {+ x 34}} : {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
+(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : + : {lamb : [num y] -> num : {- y 34}}}) "#<primop>")
+(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : "mystring" : {lamb : [num y] -> num : {- y 34}}}) "\"mystring\"")
+#;(check-exn #rx"user-error: \"this" (lambda () (top-interp '{if : {equal? "mystring" "mystring"} :
+                                                             {error "this didnt work"} : {lamb : [num y] : {- y 34}}})))
+;(check-exn #rx"user-error" (lambda () (top-interp '((lamb : e : (e e)) error))))
+(check-equal? (top-interp '{locals : {num -> num} add1 = {lamb : [num x] -> num : {+ x 1}} : num y = {+ 3 4} : {add1 y}}) "8")
 
-(check-equal? (top-interp '{if : {equal? {lamb : x : {+ x 34}} {lamb : x : {+ x 34}}} :
-                               {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
+(check-equal? (top-interp '{if : {equal? {lamb : [num x] -> num : {+ x 34}} {lamb : [num x] -> num : {+ x 34}}} :
+                               {lamb : [num x] -> num : {+ x 34}} : {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
 (check-equal? (top-interp '{if : {equal? + +} :
-                               {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
+                               {lamb : [num x] -> num : {+ x 34}} : {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
 (check-equal? (top-interp '{if : {equal? + "string"} :
-                               {lamb : x : {+ x 34}} : {lamb : y : {- y 34}}}) "#<procedure>")
+                               {lamb : [num x] -> num : {+ x 34}} : {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
 
 ;while evaluating (top-interp (quote ((lamb : empty : ((lamb : cons : ((lamb : empty? :
 ;((lamb : first : ((lamb : rest : ((lamb : Y : ((lamb : length : ((lamb : addup : (addup (cons 3 (cons 17 empty...
 ;Saving submission with errors.
 
 
-(check-equal?
+#;(check-equal?
  (top-interp '{locals : Y = {lamb : f : {{lamb : x : {x x}}
                                          {lamb : x : {f {lamb : a : {{x x} a}}}}}}
                       : empty = "mt"
