@@ -104,20 +104,26 @@
                           [(args-type-check (FunT-params lamb-type) args-type) (FunT-return lamb-type)]
                           [else (error 'type-check "ZODE: Param-Argument Type Mismatch, expected ~e, got ~e" (FunT-params lamb-type) args-type)]))]
     [(LambC ids id-types body return-type)
-     (let ([new-env (append (map (lambda ([id : Symbol] [type : Type]) (TypeBinding id type)) ids id-types) env)]
-           [body-type (type-check body new-env)])
+     (let* ([new-bindings (map (lambda (id type) (TypeBinding id type)) ids id-types)]
+            [new-env (append new-bindings env)]
+            [body-type (type-check body new-env)])
        (cond
          [(and return-type (not (equal? body-type return-type)))
           (error 'type-check "ZODE: Body type ~e does not match declared return type ~e" body-type return-type)]
          [else (FunT id-types body-type)]))]
     [other (error "ZODE: Type checking not implemented for expression: ~e" other)]))
 
+(check-equal? (type-check (LambC (list 'x) (list (NumT)) (AppC (IdC '+) (list (IdC 'x) (NumC 1))) (NumT))
+    base-tenv)(FunT (list (NumT)) (NumT)))
+(check-equal?(type-check(LambC (list 'x) (list (StrT)) (IdC 'x) (StrT))base-tenv)
+             (FunT (list (StrT)) (StrT)))
+
 (check-equal? (type-check (IfC (IdC 'false) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv) (NumT))
 (check-exn #rx"ZODE: Condition" (lambda () (type-check (IfC (IdC '+) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv)))
 (check-exn #rx"ZODE: Then" (lambda () (type-check (IfC (IdC 'true) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (StrC "String")) base-tenv)))
 (check-exn #rx"ZODE: Expected a Lambda" (lambda () (type-check (IfC (IdC '+) (AppC (IdC 'false) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv)))
 (check-exn #rx"ZODE: Param-Argument" (lambda () (type-check (IfC (IdC '+) (AppC (IdC '+) (list (StrC "string") (NumC 3))) (NumC 4)) base-tenv)))
-
+(check-exn #rx"ZODE: Body type" (lambda () (type-check (LambC (list 'x) (list (NumT)) (IdC 'x) (BoolT)) base-tenv)))
 
 (define (not-valid-identifier? id)
   (member id '(if lamb locals : =)))
