@@ -117,7 +117,6 @@
     base-tenv)(FunT (list (NumT)) (NumT)))
 (check-equal?(type-check(LambC (list 'x) (list (StrT)) (IdC 'x) (StrT))base-tenv)
              (FunT (list (StrT)) (StrT)))
-
 (check-equal? (type-check (IfC (IdC 'false) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv) (NumT))
 (check-exn #rx"ZODE: Condition" (lambda () (type-check (IfC (IdC '+) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv)))
 (check-exn #rx"ZODE: Then" (lambda () (type-check (IfC (IdC 'true) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (StrC "String")) base-tenv)))
@@ -193,6 +192,19 @@ Input: Sexp, Output: ExprC
        (AppC (LambC (cond
                       [(unique-args? (begin (println (~v (Params-Struct-syms (first clauses))))(Params-Struct-syms (first clauses)))) (Params-Struct-syms (first clauses))]
                       [else (error 'parse "ZODE: duplicate identifier found")]) (Params-Struct-types (first clauses)) (parse exp) #f) (second clauses)))]
+    ;; { local-rec : ‹id› = ‹lamb-def› : ‹expr› }
+    [(list 'local-rec ': id '= lamb-def ': body)
+     (let* ([id (cast id Symbol)]
+            [parsed-lamb-def (parse lamb-def)])
+       (if (LambC? parsed-lamb-def)
+           (AppC
+            (LambC
+             (list id)
+             (list (FunT (LambC-id-types (cast parsed-lamb-def LambC)) (or (LambC-return (cast parsed-lamb-def LambC)) (NumT))))
+             (parse body)
+             #f)
+            (list parsed-lamb-def))
+           (error "ZODE: expected lambda definition")))]
     ;; { lamb : [‹ty› ‹id›]* -> ‹ty› : ‹expr› }
     [(list 'lamb ': params ... '-> return ': body) (let ([parsed-params (parse-params (cast params (Listof Sexp)))]
                                                            [return-type (parse-type return)])
@@ -208,10 +220,6 @@ Input: Sexp, Output: ExprC
        [(not-valid-identifier? i) (error "ZODE: invalid identifier, got: ~e" i)]
        [else (IdC i)])]
     [other (error 'parse "ZODE: expected valid expression, got: ~e" other)]))
-
-
-
-
 
 ;; parser for ids 
 (define (parse-ids [lst : (Listof Symbol)]) : (Listof Symbol)
@@ -380,6 +388,7 @@ Input: ExprC Env, Output: Value
                                                   (list (NumC 12))))
 
 |#
+
 (check-exn #rx"ZODE: duplicate identifier" (lambda () (parse '(locals : {-> num} z = (lamb : : 3) : num z = 9 : (z)))))
 
 
@@ -387,6 +396,46 @@ Input: ExprC Env, Output: Value
 (check-exn #rx"ZODE: invalid identifier" (lambda () (parse '{{lamb : x locals : {+ x 1}} 12})))
 (check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse '{})))
 (check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse-clauses '{})))
+(check-exn #rx"ZODE: duplicate identifier found" (lambda () (parse '{local-rec : f = {lamb : [num x] [num x] -> num : {+ x 1}} : {f 1}})))
+(check-exn #rx"ZODE: expected lambda definition" (lambda () (parse '{local-rec : not-a-lambda = 42 : {+ 1 2}})))
+(check-equal?
+ (parse '{local-rec : g = {lamb : [num y] -> num : 42} : {g 3}})
+ (AppC
+  (LambC
+   (list 'g)
+   (list (FunT (list (NumT)) (NumT)))
+   (AppC (IdC 'g) (list (NumC 3)))
+   #f)
+  (list
+   (LambC
+    (list 'y)
+    (list (NumT))
+    (NumC 42)
+    (NumT)))))
+(check-equal?
+ (parse '{locals : {num -> num} square = {lamb : [num n] -> num
+                                           : {square-helper {- {* 2 n} 1}}}
+           : {square 13}})
+ (AppC
+  (LambC
+   (list 'square)
+   (list (FunT (list (NumT)) (NumT)))
+   (AppC (IdC 'square) (list (NumC 13)))
+   #f)
+  (list
+   (LambC
+    (list 'n)
+    (list (NumT))
+    (AppC (IdC 'square-helper)
+          (list (AppC (IdC '-)
+                      (list (AppC (IdC '*)
+                                  (list (NumC 2) (IdC 'n)))
+                            (NumC 1)))))
+    (NumT)))))
+
+
+
+
 
 ;;Parse-type
 (check-equal? (parse-type 'num) (NumT))
