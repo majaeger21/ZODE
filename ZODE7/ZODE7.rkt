@@ -103,9 +103,13 @@
                           [(not (equal? (length (FunT-params lamb-type)) (length args-type))) (error 'type-check "ZODE: Number of Argument Mismatch")]
                           [(args-type-check (FunT-params lamb-type) args-type) (FunT-return lamb-type)]
                           [else (error 'type-check "ZODE: Param-Argument Type Mismatch, expected ~e, got ~e" (FunT-params lamb-type) args-type)]))]
-    #;[(LambC ids param-types exp return-type) (let ([newEnv (add-type-env ids param-types env)])
-                                                 (cond
-                                               [(not (equal? return-type #f)) ]))] ;;consider, returns types are specified?
+    [(LambC ids id-types body return-type)
+     (let ([new-env (append (map (lambda ([id : Symbol] [type : Type]) (TypeBinding id type)) ids id-types) env)]
+           [body-type (type-check body new-env)])
+       (cond
+         [(and return-type (not (equal? body-type return-type)))
+          (error 'type-check "ZODE: Body type ~e does not match declared return type ~e" body-type return-type)]
+         [else (FunT id-types body-type)]))]
     [other (error "ZODE: Type checking not implemented for expression: ~e" other)]))
 
 (check-equal? (type-check (IfC (IdC 'false) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv) (NumT))
@@ -184,13 +188,6 @@ Input: Sexp, Output: ExprC
                       [(unique-args? (begin (println (~v (Params-Struct-syms (first clauses))))(Params-Struct-syms (first clauses)))) (Params-Struct-syms (first clauses))]
                       [else (error 'parse "ZODE: duplicate identifier found")]) (Params-Struct-types (first clauses)) (parse exp) #f) (second clauses)))]
     ;; { lamb : [‹ty› ‹id›]* -> ‹ty› : ‹expr› }
-    #;[(list 'lamb ': params ... '-> ret ': body)
-     (unless (andmap (lambda (x) (and (list? x) (= (length x) 2))) (cast params (Listof Any)))
-       (error "ZODE: Invalid lambda parameter list, got: ~e" params))
-     (let ([ids (map (lambda (x) (first (cast x (List Any))))) (cast params (Listof (List Any Any)))]
-           [id-types (map (lambda (x) (parse-type (second (cast x (List Any)))))) (cast params (Listof (List Any Any)))]
-           [return-type (Some (parse-type ret))])
-       (LambC (cast ids (Listof Symbol)) (cast id-types (Listof Type)) (parse body) (cast return-type (Option Type))))]
     [(list 'lamb ': params ... '-> return ': body) (let ([parsed-params (parse-params (cast params (Listof Sexp)))]
                                                            [return-type (parse-type return)])
                                                      (LambC (cond
