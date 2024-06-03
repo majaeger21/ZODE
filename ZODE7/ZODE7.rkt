@@ -5,13 +5,14 @@
 #|Project Status: FULLY IMPLEMENTED|#
 
 #|ZODE4 Data Types|#
-(define-type ExprC (U NumC IdC StrC IfC LambC AppC))
+(define-type ExprC (U NumC IdC StrC IfC LambC AppC RecC))
 (struct NumC ([n : Real]) #:transparent)
 (struct IdC ([s : Symbol]) #:transparent)
 (struct StrC ([s : String]) #:transparent)
 (struct IfC ([cond : ExprC] [then : ExprC] [els : ExprC]) #:transparent)
 (struct LambC ([id : (Listof Symbol)] [id-types : (Listof Type)] [exp : ExprC] [return : (Option Type)]) #:transparent)
 (struct AppC ([fun : ExprC] [args : (Listof ExprC)]) #:transparent)
+(struct RecC ([id : Symbol] [func : LambC] [return : (Option Type)] [body : ExprC]))
 
 #|Values|#
 (define-type Value (U BoolV NumV StrV PrimV CloV))
@@ -21,24 +22,27 @@
 (struct PrimV ([p : Symbol]) #:transparent)
 (struct CloV ([args : (Listof Symbol)] [body : ExprC] [env : Environment]) #:transparent)
 
-(struct Binding ([name : Symbol] [val : Value]) #:transparent)
+
+(struct Box ([value : Value]))
+(struct Binding ([name : Symbol] [box : Box]) #:transparent)
 
 
 (define-type Environment (Listof Binding))
 
 
+
 #|Top Level Environment|#
 (define top-env : Environment (list
-                 (Binding 'true (BoolV #t))
-                 (Binding 'false (BoolV #f))
-                 (Binding '+ (PrimV '+))
-                 (Binding '- (PrimV '-))
-                 (Binding '* (PrimV '*))
-                 (Binding '/ (PrimV '/))
-                 (Binding '<= (PrimV '<=))
-                 (Binding 'num-eq? (PrimV 'num-eq?))
-                 (Binding 'str-eq? (PrimV 'str-eq?))
-                 (Binding 'error (PrimV 'error))))
+                 (Binding 'true (Box (BoolV #t)))
+                 (Binding 'false (Box (BoolV #f)))
+                 (Binding '+ (Box (PrimV '+)))
+                 (Binding '- (Box (PrimV '-)))
+                 (Binding '* (Box (PrimV '*)))
+                 (Binding '/ (Box (PrimV '/)))
+                 (Binding '<= (Box (PrimV '<=)))
+                 (Binding 'num-eq? (Box (PrimV 'num-eq?)))
+                 (Binding 'str-eq? (Box (PrimV 'str-eq?)))
+                 (Binding 'error (Box (PrimV 'error)))))
 
 #| Type Language|#
 (define-type Type (U StrT BoolT NumT FunT))
@@ -77,9 +81,6 @@
     [(equal? (first params) (first args)) (args-type-check (rest params) (rest args))]
     [else #f]))
 
-;;add-type-env
-(define (add-type-env [ids : (Listof Symbol)] [params : (Listof Type)] [env : TypeEnvironment]) : TypeEnvironment
-  base-tenv)
 
 ;; type checker 
 (define (type-check [e : ExprC] [env : TypeEnvironment]) : Type
@@ -197,7 +198,7 @@ Input: Sexp, Output: ExprC
                       [else (error 'parse "ZODE: duplicate identifier found")]) (Params-Struct-types (first clauses)) (parse exp) #f) (second clauses)))]
     ;; { local-rec : ‹id› = ‹lamb-def› : ‹expr› }
     [(list 'local-rec ': id '= lamb-def ': body)
-     (let* ([id (cast id Symbol)]
+     #;(let* ([id (cast id Symbol)]
             [parsed-lamb-def (parse lamb-def)])
        (if (LambC? parsed-lamb-def)
            (AppC
@@ -207,7 +208,9 @@ Input: Sexp, Output: ExprC
              (parse body)
              #f)
             (list parsed-lamb-def))
-           (error "ZODE: expected lambda definition")))]
+           (error "ZODE: expected lambda definition")))
+     (let ([lam (cast (parse lamb-def) LambC)])(RecC (cast id Symbol) lam (LambC-return lam) (parse body)))]
+    ;(struct RecC ([id : Symbol] [func : LambC] [return : (Option Type)] [body : ExprC]))
     ;; { lamb : [‹ty› ‹id›]* -> ‹ty› : ‹expr› }
     [(list 'lamb ': params ... '-> return ': body) (let ([parsed-params (parse-params (cast params (Listof Sexp)))]
                                                            [return-type (parse-type return)])
@@ -315,14 +318,14 @@ Input: ExprC Env, Output: Value
                                                      (Listof Symbol)]) : Environment
   (cond
     [(empty? args) env]
-    [else (cons (Binding (first params) (first args))
+    [else (cons (Binding (first params) (Box (first args)))
                 (add-env env (rest args) (rest params)))]))
 
 ;;interp-IdC
 (define (interp-id [s : Symbol] [env : Environment]) : Value
   (cond
     [(empty? env) (error 'interp-id "ZODE: No parameter matching id: ~e" s)]
-    [(equal? s (Binding-name (first env))) (Binding-val (first env))]
+    [(equal? s (Binding-name (first env))) (Box-value (Binding-box (first env)))]
     [else (interp-id s (rest env))]))
 
 ;;interp-args
@@ -359,6 +362,7 @@ Input: ExprC Env, Output: Value
                                ~e, got ~e" (length (CloV-args clo)) (length args))])]
                        [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env))]))]
     [(LambC params param-types expr return) (CloV params expr env)]
+    [(RecC id func return body) ()]
     [(IdC s) (interp-id s env)]))
 
 ;;top-interp
@@ -529,7 +533,7 @@ Input: ExprC Env, Output: Value
 (check-equal? (interp (AppC (IdC '+) (list (NumC 1) (NumC 2))) top-env) (NumV 3))
 (check-equal? (interp (AppC (IdC 'num-eq?) (list (NumC 3) (AppC (IdC '+) (list
                                                      (NumC 1) (NumC 2))))) top-env) (BoolV #t))
-(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (NumC 3) (NumC 3))) (AppC (IdC '+)
+(check-equal? (interp (IfC (AppC (IdC 'num-eq?) (list (NumC 3) (NumC 3))) (AppC (IdC '+)
                                                 (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
 (check-equal? (interp (IfC (AppC (IdC 'str-eq?) (list (StrC "my string") (StrC "my string")))
                           (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
@@ -601,4 +605,13 @@ Input: ExprC Env, Output: Value
                               : {sum {cons 10 {cons 20 {cons 30 {cons 40 empty}}}}}}})
 
  "100")
+
+(top-interp '{local-rec
+ : square-helper = {lamb : [num n] -> num
+                         : {if : {<= n 0}
+                               : 0
+                               : {+ n {square-helper {- n 2}}}}}
+ : {locals : {num -> num} square = {lamb : [num n] -> num
+                                         : {square-helper {- {* 2 n} 1}}}
+           : {square 13}}})
 
