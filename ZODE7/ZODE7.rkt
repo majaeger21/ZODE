@@ -2,7 +2,7 @@
 (require typed/rackunit)
 (require racket/math)
 
-#|Project Status: FULLY IMPLEMENTED|#
+#|Project Status: Recursion not implemented |#
 
 #|ZODE4 Data Types|#
 (define-type ExprC (U NumC IdC StrC IfC LambC AppC RecC))
@@ -96,7 +96,9 @@
          [(not (equal? cond-type (BoolT)))
           (error 'type-check "ZODE: Condition not of Boolean Type, instead got ~e" cond-type)]
          [(not (equal? then-type else-type))
-          (error 'type-check "ZODE: Then and Else do not have matching types, return type ambiguous with types ~e and ~e" then-type else-type)]
+          (error 'type-check
+            "ZODE: Then and Else do not have matching types, return type ambiguous with types ~e and ~e"
+            then-type else-type)]
          [else then-type]))]
     [(AppC lamb args) (let ([lamb-type (let ([uk-type (type-check lamb env)])
                                          (cond
@@ -104,9 +106,11 @@
                                            [else (error 'type-check "ZODE: Expected a Lambda, got ~e" uk-type)]))]
                             [args-type (map (lambda ([arg : ExprC]) (type-check arg env)) args)])
                         (cond
-                          [(not (equal? (length (FunT-params lamb-type)) (length args-type))) (error 'type-check "ZODE: Number of Argument Mismatch")]
+                          [(not (equal? (length (FunT-params lamb-type)) (length args-type)))
+                           (error 'type-check "ZODE: Number of Argument Mismatch")]
                           [(args-type-check (FunT-params lamb-type) args-type) (FunT-return lamb-type)]
-                          [else (error 'type-check "ZODE: Param-Argument Type Mismatch, expected ~e, got ~e" (FunT-params lamb-type) args-type)]))]
+                          [else (error 'type-check "ZODE: Param-Argument Type Mismatch, expected ~e, got ~e"
+                                       (FunT-params lamb-type) args-type)]))]
     [(LambC ids id-types body return-type)
      (let* ([new-bindings (map (lambda (id type) (TypeBinding id type)) ids id-types)]
             [new-env (append new-bindings env)]
@@ -157,14 +161,16 @@
                        [(empty? (rest params)) (Params-Struct
                              (cons (cast sym Symbol) '())
                              (cons (parse-type type) '()))]
-                       [else (begin (println (~v (rest params))) (println (~v params))(let ([result (parse-params (rest params))])
+                       [else (begin (println (~v (rest params))) (println (~v params))
+                                    (let ([result (parse-params (rest params))])
                             (Params-Struct
                              (cons (cast sym Symbol) (Params-Struct-syms result))
                              (cons (parse-type type) (Params-Struct-types result)))))])]
     [other (error "ZODE: Not valid parameter formatting")]))
 
 
-(check-equal? (parse-params (list '[num x] '[num y] '[num z])) (Params-Struct (list 'x 'y 'z) (list (NumT) (NumT) (NumT))))
+(check-equal? (parse-params (list '[num x] '[num y] '[num z])) (Params-Struct
+                                                   (list 'x 'y 'z) (list (NumT) (NumT) (NumT))))
 (check-equal? (parse-params (list '[num x] '[num y])) (Params-Struct (list 'x 'y) (list (NumT) (NumT))))
 
 #|
@@ -183,8 +189,10 @@ Input: Sexp, Output: ExprC
     [(list 'locals ': cls ... ': exp) 
      (let ([clauses (parse-clauses (cast cls (Listof Sexp)))])
        (AppC (LambC (cond
-                      [(unique-args? (begin (println (~v (Params-Struct-syms (first clauses))))(Params-Struct-syms (first clauses)))) (Params-Struct-syms (first clauses))]
-                      [else (error 'parse "ZODE: duplicate identifier found")]) (Params-Struct-types (first clauses)) (parse exp) #f) (second clauses)))]
+                      [(unique-args? (begin (println (~v (Params-Struct-syms (first clauses))))
+                                            (Params-Struct-syms (first clauses)))) (Params-Struct-syms (first clauses))]
+                      [else (error 'parse "ZODE: duplicate identifier found")])
+                    (Params-Struct-types (first clauses)) (parse exp) #f) (second clauses)))]
     ;; { local-rec : ‹id› = ‹lamb-def› : ‹expr› }
     [(list 'local-rec ': id '= lamb-def ': body)
      #;(let* ([id (cast id Symbol)]
@@ -193,7 +201,8 @@ Input: Sexp, Output: ExprC
            (AppC
             (LambC
              (list id)
-             (list (FunT (LambC-id-types (cast parsed-lamb-def LambC)) (or (LambC-return (cast parsed-lamb-def LambC)) (NumT))))
+             (list (FunT (LambC-id-types (cast parsed-lamb-def LambC))
+                         (or (LambC-return (cast parsed-lamb-def LambC)) (NumT))))
              (parse body)
              #f)
             (list parsed-lamb-def))
@@ -204,9 +213,10 @@ Input: Sexp, Output: ExprC
     [(list 'lamb ': params ... '-> return ': body) (let ([parsed-params (parse-params (cast params (Listof Sexp)))]
                                                            [return-type (parse-type return)])
                                                      (LambC (cond
-                                                              [(unique-args? (Params-Struct-syms parsed-params)) (Params-Struct-syms parsed-params)]
-                                                              [else (error 'parse "ZODE: duplicate identifier found")])
-                                                            (Params-Struct-types parsed-params) (parse body) return-type))]
+                                                              [(unique-args? (Params-Struct-syms parsed-params))
+                                                               (Params-Struct-syms parsed-params)]
+       [else (error 'parse "ZODE: duplicate identifier found")])
+             (Params-Struct-types parsed-params) (parse body) return-type))]
     ;; { ‹expr› ‹expr›* }
     [(list fun args ...) (AppC (parse fun) (map parse args))]
     ;; <id>
@@ -228,18 +238,24 @@ Input: Sexp, Output: ExprC
 ;; parser for clauses 
 (define (parse-clauses [exp : Sexp]) : (List Params-Struct (Listof ExprC))
   (match exp
-    [(list type (? is-valid-identifier? id) '= exp) (list (Params-Struct (list (cast id Symbol)) (list (parse-type type))) (list (parse exp)))]
+    [(list type (? is-valid-identifier? id) '= exp) (list (Params-Struct (list (cast id Symbol))
+                                                                         (list (parse-type type))) (list (parse exp)))]
     [(list type (? is-valid-identifier? id) '= exp ': cls ...)
      (let ([res (parse-clauses cls)])
        (if (unique-args? (cons id (Params-Struct-syms (first res))))
-           (list (Params-Struct (cons id (Params-Struct-syms (first res))) (cons (parse-type type) (Params-Struct-types (first res)))) (cons (parse exp) (second res)))
+           (list (Params-Struct (cons id (Params-Struct-syms (first res))) (cons (parse-type type)
+                                                       (Params-Struct-types
+                                                        (first res)))) (cons (parse exp) (second res)))
            (error "ZODE: duplicate identifier found: ~e" id)))]
     [other
      (error 'parse-clauses "ZODE: expected valid expression, got: ~e" other)]))
 
 
-(check-equal? (parse '{lamb : [num n] -> num : {+ n 1}}) (LambC (list 'n) (list (NumT)) (AppC (IdC '+) (list (IdC 'n) (NumC 1))) (NumT)))
-(check-equal? (parse '{locals : num a = 3 : num b = 4 : {* a b}}) (AppC (LambC (list 'a 'b) (list (NumT) (NumT)) (AppC (IdC '*) (list (IdC 'a) (IdC 'b))) #f) (list (NumC 3) (NumC 4))))
+(check-equal? (parse '{lamb : [num n] -> num : {+ n 1}}) (LambC (list 'n)
+                                            (list (NumT)) (AppC (IdC '+) (list (IdC 'n) (NumC 1))) (NumT)))
+(check-equal? (parse '{locals : num a = 3 : num b = 4 : {* a b}})
+             (AppC (LambC (list 'a 'b) (list (NumT) (NumT)) (AppC (IdC '*) (list (IdC 'a) (IdC 'b))) #f)
+                   (list (NumC 3) (NumC 4))))
 
 #|Top-level Env Functions|#
 (define (apply-func [op : Symbol] [args : (Listof Value)]) : Value
@@ -346,12 +362,13 @@ Input: ExprC Env, Output: Value
                      (match clo
                        [(? CloV?)(cond
                          [(= (length args) (length (CloV-args clo))) (interp
-                                      (CloV-body clo) (add-env (CloV-env clo) (interp-args args env) (CloV-args clo)))]
+                                      (CloV-body clo) (add-env
+                                                       (CloV-env clo) (interp-args args env) (CloV-args clo)))]
                          [else (error 'interp "ZODE: Number of Argument Mismatch, expected
                                ~e, got ~e" (length (CloV-args clo)) (length args))])]
                        [(? PrimV?) (apply-func (PrimV-p clo) (interp-args args env))]))]
     [(LambC params param-types expr return) (CloV params expr env)]
-    [(RecC id func return body) ()]
+    ;[(RecC id func return body) ()]
     [(IdC s) (interp-id s env)]))
 
 ;;top-interp
@@ -369,7 +386,8 @@ Input: ExprC Env, Output: Value
 (check-equal? (parse "hello") (StrC "hello"))
 (check-equal? (parse '{if : 3 : 4 : 5}) (IfC (NumC 3) (NumC 4) (NumC 5)))
 (check-equal? (parse-clauses '{num x = 12}) (list (Params-Struct(list 'x) (list (NumT))) (list (NumC 12))))
-(check-equal? (parse-clauses '{num x = 12 : num y = 3}) (list (Params-Struct (list 'x 'y) (list (NumT) (NumT))) (list (NumC 12) (NumC 3))))
+(check-equal? (parse-clauses '{num x = 12 : num y = 3}) (list (Params-Struct (list 'x 'y)
+                                                                   (list (NumT) (NumT))) (list (NumC 12) (NumC 3))))
 #|(check-equal? (parse '{locals : x = 12 : {+ x 1}}) (AppC (LambC (list 'x) (AppC (IdC '+)
                                                                                 (list (IdC 'x)
                                                                                       (NumC 1))))
@@ -385,14 +403,16 @@ Input: ExprC Env, Output: Value
 
 |#
 
-(check-exn #rx"ZODE: duplicate identifier" (lambda () (parse '(locals : {-> num} z = (lamb : : 3) : num z = 9 : (z)))))
+(check-exn #rx"ZODE: duplicate identifier" (lambda () (parse
+                                                       '(locals : {-> num} z = (lamb : : 3) : num z = 9 : (z)))))
 
 
 (check-exn #rx"ZODE: invalid identifier, got: " (lambda () (parse '{if : 3 : 4 : 'locals})))
 (check-exn #rx"ZODE: invalid identifier" (lambda () (parse '{{lamb : x locals : {+ x 1}} 12})))
 (check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse '{})))
 (check-exn #rx"ZODE: expected valid expression, got: " (lambda () (parse-clauses '{})))
-(check-exn #rx"ZODE: duplicate identifier found" (lambda () (parse '{local-rec : f = {lamb : [num x] [num x] -> num : {+ x 1}} : {f 1}})))
+(check-exn #rx"ZODE: duplicate identifier found" (lambda () (parse
+                                     '{local-rec : f = {lamb : [num x] [num x] -> num : {+ x 1}} : {f 1}})))
 (check-exn #rx"ZODE: expected lambda definition" (lambda () (parse '{local-rec : not-a-lambda = 42 : {+ 1 2}})))
 (check-equal?
  (parse '{local-rec : g = {lamb : [num y] -> num : 42} : {g 3}})
@@ -488,11 +508,16 @@ Input: ExprC Env, Output: Value
 (check-equal?(type-check(LambC (list 'x) (list (StrT)) (IdC 'x) (StrT))base-tenv)
              (FunT (list (StrT)) (StrT)))
 (check-equal? (type-check (IfC (IdC 'false) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv) (NumT))
-(check-exn #rx"ZODE: Condition" (lambda () (type-check (IfC (IdC '+) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv)))
-(check-exn #rx"ZODE: Then" (lambda () (type-check (IfC (IdC 'true) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (StrC "String")) base-tenv)))
-(check-exn #rx"ZODE: Expected a Lambda" (lambda () (type-check (IfC (IdC '+) (AppC (IdC 'false) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv)))
-(check-exn #rx"ZODE: Param-Argument" (lambda () (type-check (IfC (IdC '+) (AppC (IdC '+) (list (StrC "string") (NumC 3))) (NumC 4)) base-tenv)))
-(check-exn #rx"ZODE: Body type" (lambda () (type-check (LambC (list 'x) (list (NumT)) (IdC 'x) (BoolT)) base-tenv)))
+(check-exn #rx"ZODE: Condition" (lambda () (type-check (IfC (IdC '+) (AppC (IdC '+) (list (NumC 3)
+                                                                                  (NumC 3))) (NumC 4)) base-tenv)))
+(check-exn #rx"ZODE: Then" (lambda () (type-check (IfC (IdC 'true) (AppC (IdC '+)
+                                          (list (NumC 3) (NumC 3))) (StrC "String")) base-tenv)))
+(check-exn #rx"ZODE: Expected a Lambda" (lambda () (type-check (IfC (IdC '+)
+                                     (AppC (IdC 'false) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv)))
+(check-exn #rx"ZODE: Param-Argument" (lambda () (type-check
+                  (IfC (IdC '+) (AppC (IdC '+) (list (StrC "string") (NumC 3))) (NumC 4)) base-tenv)))
+(check-exn #rx"ZODE: Body type" (lambda ()
+                                  (type-check (LambC (list 'x) (list (NumT)) (IdC 'x) (BoolT)) base-tenv)))
 (let ([parsed-expr (parse '{locals
                             : num x = 5
                             : {locals
@@ -527,7 +552,8 @@ Input: ExprC Env, Output: Value
 
 ;interp test cases
 (check-equal? (interp (AppC (IdC '+) (list (AppC (LambC (list 'x 'y) (list (NumT) (NumT)) (AppC (IdC '+)
-                            (list (IdC 'x) (IdC 'y))) (NumT)) (list (NumC 3) (NumC 5))) (NumC 2))) top-env) (NumV 10))
+                            (list (IdC 'x) (IdC 'y))) (NumT))
+                                                 (list (NumC 3) (NumC 5))) (NumC 2))) top-env) (NumV 10))
 
 (check-exn #rx"ZODE: Expected CloV" (lambda () (interp (AppC (IdC '+) (list (AppC
                                              (NumC 4) (list (NumC 3) (NumC 5))) (NumC 2))) top-env)))
@@ -560,20 +586,27 @@ Input: ExprC Env, Output: Value
 (check-equal? (top-interp '{locals : bool x = false : x}) "false")
 (check-equal? (top-interp '{locals : bool x = true : x}) "true")
 (check-equal? (top-interp '{if : {str-eq? "mystring" "mystring"} :
-                               {lamb : [num x] -> num : {+ x 34}} : {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
-(check-equal? (top-interp '{if : {str-eq? "mystring" "mystring"} : + : {lamb : [num y] -> num : {- y 34}}}) "#<primop>")
-(check-equal? (top-interp '{if : {str-eq? "mystring" "mystring"} : "mystring" : {lamb : [num y] -> num : {- y 34}}}) "\"mystring\"")
+                               {lamb : [num x] -> num : {+ x 34}} :
+                               {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
+(check-equal? (top-interp '{if : {str-eq? "mystring" "mystring"} : + :
+                               {lamb : [num y] -> num : {- y 34}}}) "#<primop>")
+(check-equal? (top-interp '{if : {str-eq? "mystring" "mystring"} : "mystring" :
+                               {lamb : [num y] -> num : {- y 34}}}) "\"mystring\"")
 #;(check-exn #rx"user-error: \"this" (lambda () (top-interp '{if : {equal? "mystring" "mystring"} :
-                                                             {error "this didnt work"} : {lamb : [num y] : {- y 34}}})))
+                    {error "this didnt work"} : {lamb : [num y] : {- y 34}}})))
 ;(check-exn #rx"user-error" (lambda () (top-interp '((lamb : e : (e e)) error))))
-(check-equal? (top-interp '{locals : {num -> num} add1 = {lamb : [num x] -> num : {+ x 1}} : num y = {+ 3 4} : {add1 y}}) "8")
+(check-equal? (top-interp '{locals : {num -> num} add1 =
+                                   {lamb : [num x] -> num : {+ x 1}} : num y = {+ 3 4} : {add1 y}}) "8")
 
 #;(check-equal? (top-interp '{if : {equal? {lamb : [num x] -> num : {+ x 34}} {lamb : [num x] -> num : {+ x 34}}} :
-                               {lamb : [num x] -> num : {+ x 34}} : {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
+                               {lamb : [num x] -> num : {+ x 34}} :
+                               {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
 #;(check-equal? (top-interp '{if : {equal? + +} :
-                               {lamb : [num x] -> num : {+ x 34}} : {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
+                               {lamb : [num x] -> num : {+ x 34}} :
+                               {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
 #;(check-equal? (top-interp '{if : {equal? + "string"} :
-                               {lamb : [num x] -> num : {+ x 34}} : {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
+                               {lamb : [num x] -> num : {+ x 34}} :
+                               {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
 
 ;while evaluating (top-interp (quote ((lamb : empty : ((lamb : cons : ((lamb : empty? :
 ;((lamb : first : ((lamb : rest : ((lamb : Y : ((lamb : length : ((lamb : addup : (addup (cons 3 (cons 17 empty...
