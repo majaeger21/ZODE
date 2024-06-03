@@ -36,7 +36,8 @@
                  (Binding '* (PrimV '*))
                  (Binding '/ (PrimV '/))
                  (Binding '<= (PrimV '<=))
-                 (Binding 'equal? (PrimV 'equal?))
+                 (Binding 'num-eq? (PrimV 'num-eq?))
+                 (Binding 'str-eq? (PrimV 'str-eq?))
                  (Binding 'error (PrimV 'error))))
 
 #| Type Language|#
@@ -57,6 +58,8 @@
                    (TypeBinding '- (FunT (list (NumT) (NumT)) (NumT)))
                    (TypeBinding '* (FunT (list (NumT) (NumT)) (NumT)))
                    (TypeBinding '/ (FunT (list (NumT) (NumT)) (NumT)))
+                   (TypeBinding 'num-eq? (FunT (list (NumT) (NumT)) (BoolT)))
+                   (TypeBinding 'str-eq? (FunT (list (StrT) (StrT)) (BoolT)))
                    (TypeBinding 'false (BoolT))
                    (TypeBinding 'true (BoolT))))
 
@@ -255,7 +258,7 @@ Input: Sexp, Output: ExprC
     [(equal? op '/) (apply-op '/ args)]
     [(equal? op '<=) (apply-op '<= args)]
     [(equal? op 'error) (apply-op 'error args)]
-    [(equal? op 'equal?)
+    [(or (equal? op 'str-eq?)(equal? op 'num-eq?))
      (cond
        [(equal? (length args) 2) (BoolV (equals? (first args) (first (rest args))))]
        [else (error "ZODE: Wrong amount of args")])]
@@ -501,11 +504,11 @@ Input: ExprC Env, Output: Value
 (check-exn #rx"ZODE: Unknown operator, got: " (lambda () (apply-func 'j (list (NumV 3) (NumV 0)))))
 (check-exn #rx"ZODE: Unknown operator, got: " (lambda () (apply-op 'j (list (NumV 3) (NumV 0)))))
 (check-exn #rx"ZODE: Invalid arguments for operation" (lambda () (apply-op 'j (list (BoolV #t) (NumV 0)))))
-(check-equal? (apply-func 'equal? (list (NumV 5) (NumV 6))) (BoolV #f))
-(check-equal? (apply-func 'equal? (list (NumV 6) (NumV 6))) (BoolV #t))
-(check-equal? (apply-func 'equal? (list (StrV "hi") (StrV "hi"))) (BoolV #t))
-(check-equal? (apply-func 'equal? (list (BoolV #t) (BoolV #f))) (BoolV #f))
-(check-exn #rx"ZODE: Wrong amount of args" (lambda () (apply-func 'equal? (list (NumV 5)
+(check-equal? (apply-func 'num-eq? (list (NumV 5) (NumV 6))) (BoolV #f))
+(check-equal? (apply-func 'num-eq? (list (NumV 6) (NumV 6))) (BoolV #t))
+(check-equal? (apply-func 'str-eq? (list (StrV "hi") (StrV "hi"))) (BoolV #t))
+;(check-equal? (apply-func 'equal? (list (BoolV #t) (BoolV #f))) (BoolV #f))
+(check-exn #rx"ZODE: Wrong amount of args" (lambda () (apply-func 'num-eq? (list (NumV 5)
                                                                                  (NumV 6) (NumV 3)))))
 (check-exn #rx"ZODE: No parameter matching id: " (lambda () (lookup-id 'hi '())))
 
@@ -524,39 +527,39 @@ Input: ExprC Env, Output: Value
 (check-equal? (interp (AppC (IdC '*) (list (NumC 1) (NumC 2))) top-env) (NumV 2))
 (check-equal? (interp (AppC (IdC '/) (list (NumC 1) (NumC 2))) top-env) (NumV 1/2))
 (check-equal? (interp (AppC (IdC '+) (list (NumC 1) (NumC 2))) top-env) (NumV 3))
-(check-equal? (interp (AppC (IdC 'equal?) (list (NumC 3) (AppC (IdC '+) (list
+(check-equal? (interp (AppC (IdC 'num-eq?) (list (NumC 3) (AppC (IdC '+) (list
                                                      (NumC 1) (NumC 2))))) top-env) (BoolV #t))
 (check-equal? (interp (IfC (AppC (IdC 'equal?) (list (NumC 3) (NumC 3))) (AppC (IdC '+)
                                                 (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
-(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (StrC "my string") (StrC "my string")))
+(check-equal? (interp (IfC (AppC (IdC 'str-eq?) (list (StrC "my string") (StrC "my string")))
                           (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
-(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (IdC 'false) (IdC 'false)))
+#;(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (IdC 'false) (IdC 'false)))
                            (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 3))
-(check-equal? (interp (IfC (AppC (IdC 'equal?) (list (NumC 3) (NumC 4)))
+(check-equal? (interp (IfC (AppC (IdC 'num-eq?) (list (NumC 3) (NumC 4)))
                            (AppC (IdC '+) (list (NumC 1) (NumC 2))) (NumC 1)) top-env) (NumV 1))
 (check-exn #rx"ZODE: Expected a condition" (lambda () (interp (IfC (NumC 4) (AppC (IdC '+)
                                                   (list (NumC 1) (NumC 2))) (NumC 1)) top-env)))
-(check-exn #rx"ZODE: No parameter" (lambda () (interp (IfC (AppC (IdC 'equal?) (list (NumC 3)
+(check-exn #rx"ZODE: No parameter" (lambda () (interp (IfC (AppC (IdC 'num-eq?) (list (NumC 3)
                                      (NumC 3))) (AppC (IdC 'z) (list (NumC 1) (NumC 2))) (NumC 1)) top-env)))
 
 ;top interp tests
 (check-equal? (top-interp '{locals : num x = 12 : {+ x 1}}) "13")
 (check-equal? (top-interp '{locals : bool x = false : x}) "false")
 (check-equal? (top-interp '{locals : bool x = true : x}) "true")
-(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} :
+(check-equal? (top-interp '{if : {str-eq? "mystring" "mystring"} :
                                {lamb : [num x] -> num : {+ x 34}} : {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
-(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : + : {lamb : [num y] -> num : {- y 34}}}) "#<primop>")
-(check-equal? (top-interp '{if : {equal? "mystring" "mystring"} : "mystring" : {lamb : [num y] -> num : {- y 34}}}) "\"mystring\"")
+(check-equal? (top-interp '{if : {str-eq? "mystring" "mystring"} : + : {lamb : [num y] -> num : {- y 34}}}) "#<primop>")
+(check-equal? (top-interp '{if : {str-eq? "mystring" "mystring"} : "mystring" : {lamb : [num y] -> num : {- y 34}}}) "\"mystring\"")
 #;(check-exn #rx"user-error: \"this" (lambda () (top-interp '{if : {equal? "mystring" "mystring"} :
                                                              {error "this didnt work"} : {lamb : [num y] : {- y 34}}})))
 ;(check-exn #rx"user-error" (lambda () (top-interp '((lamb : e : (e e)) error))))
 (check-equal? (top-interp '{locals : {num -> num} add1 = {lamb : [num x] -> num : {+ x 1}} : num y = {+ 3 4} : {add1 y}}) "8")
 
-(check-equal? (top-interp '{if : {equal? {lamb : [num x] -> num : {+ x 34}} {lamb : [num x] -> num : {+ x 34}}} :
+#;(check-equal? (top-interp '{if : {equal? {lamb : [num x] -> num : {+ x 34}} {lamb : [num x] -> num : {+ x 34}}} :
                                {lamb : [num x] -> num : {+ x 34}} : {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
-(check-equal? (top-interp '{if : {equal? + +} :
+#;(check-equal? (top-interp '{if : {equal? + +} :
                                {lamb : [num x] -> num : {+ x 34}} : {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
-(check-equal? (top-interp '{if : {equal? + "string"} :
+#;(check-equal? (top-interp '{if : {equal? + "string"} :
                                {lamb : [num x] -> num : {+ x 34}} : {lamb : [num y] -> num : {- y 34}}}) "#<procedure>")
 
 ;while evaluating (top-interp (quote ((lamb : empty : ((lamb : cons : ((lamb : empty? :
