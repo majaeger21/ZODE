@@ -432,6 +432,25 @@ Input: ExprC Env, Output: Value
                                   (list (NumC 2) (IdC 'n)))
                             (NumC 1)))))
     (NumT)))))
+(check-equal?
+ (parse '{locals
+           : num x = 5
+           : {locals
+              : num y = 10
+              : {+ x y}}})
+ (AppC
+  (LambC
+   (list 'x)
+   (list (NumT))
+   (AppC
+    (LambC
+     (list 'y)
+     (list (NumT))
+     (AppC (IdC '+) (list (IdC 'x) (IdC 'y)))
+     #f)
+    (list (NumC 10)))
+   #f)
+  (list (NumC 5))))
 
 
 
