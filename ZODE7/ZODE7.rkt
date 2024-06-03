@@ -113,17 +113,6 @@
          [else (FunT id-types body-type)]))]
     [other (error "ZODE: Type checking not implemented for expression: ~e" other)]))
 
-(check-equal? (type-check (LambC (list 'x) (list (NumT)) (AppC (IdC '+) (list (IdC 'x) (NumC 1))) (NumT))
-    base-tenv)(FunT (list (NumT)) (NumT)))
-(check-equal?(type-check(LambC (list 'x) (list (StrT)) (IdC 'x) (StrT))base-tenv)
-             (FunT (list (StrT)) (StrT)))
-(check-equal? (type-check (IfC (IdC 'false) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv) (NumT))
-(check-exn #rx"ZODE: Condition" (lambda () (type-check (IfC (IdC '+) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv)))
-(check-exn #rx"ZODE: Then" (lambda () (type-check (IfC (IdC 'true) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (StrC "String")) base-tenv)))
-(check-exn #rx"ZODE: Expected a Lambda" (lambda () (type-check (IfC (IdC '+) (AppC (IdC 'false) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv)))
-(check-exn #rx"ZODE: Param-Argument" (lambda () (type-check (IfC (IdC '+) (AppC (IdC '+) (list (StrC "string") (NumC 3))) (NumC 4)) base-tenv)))
-(check-exn #rx"ZODE: Body type" (lambda () (type-check (LambC (list 'x) (list (NumT)) (IdC 'x) (BoolT)) base-tenv)))
-
 (define (not-valid-identifier? id)
   (member id '(if lamb locals : =)))
 
@@ -479,15 +468,35 @@ Input: ExprC Env, Output: Value
   (list (NumC 5))))
 
 
-
-
-
 ;;Parse-type
 (check-equal? (parse-type 'num) (NumT))
 (check-equal? (parse-type 'str) (StrT))
 (check-equal? (parse-type 'bool) (BoolT))
 (check-equal? (parse-type '(num -> num)) (FunT (list (NumT)) (NumT)))
 (check-exn #rx"ZODE: invalid type expression" (lambda () (parse-type 'invalid-type)))
+
+;;Type-check
+(check-equal? (type-check (LambC (list 'x) (list (NumT)) (AppC (IdC '+) (list (IdC 'x) (NumC 1))) (NumT))
+    base-tenv)(FunT (list (NumT)) (NumT)))
+(check-equal?(type-check(LambC (list 'x) (list (StrT)) (IdC 'x) (StrT))base-tenv)
+             (FunT (list (StrT)) (StrT)))
+(check-equal? (type-check (IfC (IdC 'false) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv) (NumT))
+(check-exn #rx"ZODE: Condition" (lambda () (type-check (IfC (IdC '+) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv)))
+(check-exn #rx"ZODE: Then" (lambda () (type-check (IfC (IdC 'true) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (StrC "String")) base-tenv)))
+(check-exn #rx"ZODE: Expected a Lambda" (lambda () (type-check (IfC (IdC '+) (AppC (IdC 'false) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv)))
+(check-exn #rx"ZODE: Param-Argument" (lambda () (type-check (IfC (IdC '+) (AppC (IdC '+) (list (StrC "string") (NumC 3))) (NumC 4)) base-tenv)))
+(check-exn #rx"ZODE: Body type" (lambda () (type-check (LambC (list 'x) (list (NumT)) (IdC 'x) (BoolT)) base-tenv)))
+(let ([parsed-expr (parse '{locals
+                            : num x = 5
+                            : {locals
+                               : num y = 10
+                               : {+ x y}}})])
+  (check-equal?
+   (type-check parsed-expr base-tenv)
+   (NumT)))
+
+
+
 
 ;;Top-level Env Functions
 (check-equal? (apply-func '+ (list (NumV 5) (NumV 3))) (NumV 8))
