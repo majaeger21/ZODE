@@ -74,6 +74,10 @@
     [(equal? (first params) (first args)) (args-type-check (rest params) (rest args))]
     [else #f]))
 
+;;add-type-env
+(define (add-type-env [ids : (Listof Symbol)] [params : (Listof Type)] [env : TypeEnvironment]) : TypeEnvironment
+  base-tenv)
+
 ;; type checker 
 (define (type-check [e : ExprC] [env : TypeEnvironment]) : Type
   (match e
@@ -99,7 +103,9 @@
                           [(not (equal? (length (FunT-params lamb-type)) (length args-type))) (error 'type-check "ZODE: Number of Argument Mismatch")]
                           [(args-type-check (FunT-params lamb-type) args-type) (FunT-return lamb-type)]
                           [else (error 'type-check "ZODE: Param-Argument Type Mismatch, expected ~e, got ~e" (FunT-params lamb-type) args-type)]))]
-    ;[(LambC ids exp) (FunT (map (lambda (id) (lookup-id id env)) ids) (type-check exp))] ;;consider, returns types are specified?
+    #;[(LambC ids param-types exp return-type) (let ([newEnv (add-type-env ids param-types env)])
+                                                 (cond
+                                               [(not (equal? return-type #f)) ]))] ;;consider, returns types are specified?
     [other (error "ZODE: Type checking not implemented for expression: ~e" other)]))
 
 (check-equal? (type-check (IfC (IdC 'false) (AppC (IdC '+) (list (NumC 3) (NumC 3))) (NumC 4)) base-tenv) (NumT))
